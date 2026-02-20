@@ -30,4 +30,9 @@ def ingest(path: str) -> list[dict]:
         )
 
     combined.columns = [str(c).strip() for c in combined.columns]
+    missing_columns = [col for col in RETAIL_COLUMNS if col not in combined.columns]
+    if missing_columns:
+        raise ValueError(f"Missing required columns: {', '.join(missing_columns)}")
+
+    combined = combined.dropna(how="all")
     return combined.to_dict(orient="records")
