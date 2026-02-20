@@ -1,1 +1,1 @@
-"""Smart Product Grouper — CSV → Clusters → Canonical Labels → Report."""
+"""Smart Product Grouper — Excel -> Clusters -> Canonical Labels -> Report."""

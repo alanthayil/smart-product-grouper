@@ -20,7 +20,7 @@ test:
 	conda run -n $(CONDA_ENV) pytest tests/ -v
 
 demo:
-	conda run -n $(CONDA_ENV) python run.py data/demo.csv
+	conda run -n $(CONDA_ENV) python run.py data/online_retail_II.xlsx
 
 lint:
 	conda run -n $(CONDA_ENV) ruff check src/

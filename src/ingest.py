@@ -1,4 +1,4 @@
-"""Load product data from CSV or Excel into pipeline-ready records."""
+"""Load product data from Excel into pipeline-ready records."""
 
 import pandas as pd
 
@@ -16,7 +16,7 @@ RETAIL_COLUMNS = (
 
 
 def ingest(path: str) -> list[dict]:
-    """Read .xlsx or .csv, normalize column names, return list of dicts per row."""
+    """Read .xlsx, normalize column names, return list of dicts per row."""
     if path.lower().endswith(".xlsx"):
         dfs = pd.read_excel(
             path,
@@ -24,11 +24,9 @@ def ingest(path: str) -> list[dict]:
             engine="openpyxl",
         )
         combined = pd.concat(dfs.values(), ignore_index=True)
-    elif path.lower().endswith(".csv"):
-        combined = pd.read_csv(path)
     else:
         raise ValueError(
-            f"Unsupported input format: {path!r}. Supported extensions are .xlsx and .csv."
+            f"Unsupported input format: {path!r}. Supported extension is .xlsx."
         )
 
     combined.columns = [str(c).strip() for c in combined.columns]

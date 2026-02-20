@@ -26,8 +26,6 @@ For `.xlsx` input, both sheets are read and combined:
 - `Year 2009-2010`
 - `Year 2010-2011`
 
-For `.csv` input, the same column names are expected.
-
 ### 1.2 Column-level contract
 
 | Column | Required | Type (raw) | Validation rule |
@@ -59,7 +57,7 @@ Planned contract behavior (to enforce in implementation):
 
 | Stage | Function | Input | Output | Contract status |
 |---|---|---|---|---|
-| Ingest | `ingest(path)` | file path (`.xlsx` or `.csv`) | `list[dict]` raw records | Current |
+| Ingest | `ingest(path)` | file path (`.xlsx`) | `list[dict]` raw records | Current |
 | Normalize | `normalize(records)` | `list[dict]` raw records | `list[dict]` normalized records | Planned |
 | Extract | `extract(records)` | `list[dict]` normalized records | `list[dict]` feature records | Planned |
 | Cluster | `cluster(records_or_features)` | normalized/feature records | `list[dict]` clustered records | Planned |

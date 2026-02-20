@@ -2,14 +2,13 @@
 
 **Phase 1 — Foundation (vertical slice):** Excel → Clusters → Canonical Labels → Report.
 
-Product data is ingested from Excel (.xlsx) or CSV (.csv), normalized, clustered, assigned canonical labels, and summarized in a report.
+Product data is ingested from Excel (.xlsx), normalized, clustered, assigned canonical labels, and summarized in a report.
 
-## Input data (primary: xlsx, CSV also supported)
+## Input data
 
 - **File:** `data/online_retail_II.xlsx` — place this file in `data/` for the default run.
 - **Sheets:** `Year 2009-2010`, `Year 2010-2011` (both are read and combined).
 - **Columns:** Invoice, StockCode, Description, Quantity, InvoiceDate, Price, Customer ID, Country.
-- **CSV support:** `python run.py path/to/file.csv` and `make run INPUT=path/to/file.csv` are supported.
 
 ## Setup
 
@@ -25,12 +24,12 @@ Or step by step:
 | Command | Purpose |
 |---------|---------|
 | `make setup` | Create conda env + install deps (run once per clone) |
-| `make run` | Run pipeline on default xlsx (`data/online_retail_II.xlsx`). Override: `make run INPUT=path/to/file.{xlsx,csv}` |
+| `make run` | Run pipeline on default xlsx (`data/online_retail_II.xlsx`). Override: `make run INPUT=path/to/file.xlsx` |
 | `make test` | Run tests (`pytest tests/ -v`) |
-| `make demo` | Run pipeline on `data/demo.csv` |
+| `make demo` | Run pipeline on `data/online_retail_II.xlsx` |
 | `make lint` | Lint `src/` with ruff |
 
-All targets use the conda env `datamining` via `conda run`. Or activate `datamining` and run `python run.py data/online_retail_II.xlsx` (or any `.csv`), `pytest tests/ -v`, `ruff check src/` directly.
+All targets use the conda env `datamining` via `conda run`. Or activate `datamining` and run `python run.py data/online_retail_II.xlsx`, `pytest tests/ -v`, `ruff check src/` directly.
 
 ## Project layout
 
