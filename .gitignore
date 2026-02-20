@@ -2,3 +2,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Large data (download/place in data/ if needed)
+data/online_retail_II.xlsx
