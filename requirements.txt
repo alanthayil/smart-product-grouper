@@ -1,0 +1,7 @@
+# Phase 1 — minimal deps; expand as pipeline is implemented
+pytest>=7.0.0
+ruff>=0.1.0
+
+# Placeholders for vertical slice (uncomment when needed)
+# pandas>=2.0.0
+# scikit-learn>=1.3.0
