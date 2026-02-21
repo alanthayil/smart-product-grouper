@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-import tempfile
 
 from generate_report import main as generate_report_main
 from src.reporting import render_evaluation_report
@@ -57,32 +56,58 @@ def test_render_evaluation_report_shows_empty_state_for_no_suspects() -> None:
 
 
 def test_generate_report_cli_writes_default_output(monkeypatch) -> None:
-    with tempfile.TemporaryDirectory(dir=".") as workdir:
-        workdir_path = Path(workdir)
-        input_path = workdir_path / "evaluation.json"
-        input_path.write_text(json.dumps(_sample_evaluation()), encoding="utf-8")
-        monkeypatch.chdir(workdir_path)
+    payload = json.dumps(_sample_evaluation())
+    writes: dict[str, str] = {}
 
-        exit_code = generate_report_main([str(input_path)])
+    def fake_read_text(self: Path, encoding: str = "utf-8") -> str:
+        assert encoding == "utf-8"
+        assert str(self) == "evaluation.json"
+        return payload
 
-        output_path = workdir_path / "evaluation_report.md"
-        assert exit_code == 0
-        assert output_path.exists()
-        content = output_path.read_text(encoding="utf-8")
-        assert "## Key Stats" in content
-        assert "## Suspect Clusters" in content
+    def fake_write_text(
+        self: Path,
+        text: str,
+        encoding: str = "utf-8",
+    ) -> int:
+        assert encoding == "utf-8"
+        writes[str(self)] = text
+        return len(text)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+    monkeypatch.setattr(Path, "write_text", fake_write_text)
+
+    exit_code = generate_report_main(["evaluation.json"])
+
+    assert exit_code == 0
+    assert "evaluation_report.md" in writes
+    assert "## Key Stats" in writes["evaluation_report.md"]
+    assert "## Suspect Clusters" in writes["evaluation_report.md"]
 
 
-def test_generate_report_cli_writes_custom_output_path() -> None:
-    with tempfile.TemporaryDirectory(dir=".") as workdir:
-        workdir_path = Path(workdir)
-        input_path = workdir_path / "evaluation.json"
-        output_path = workdir_path / "nested" / "my_report.md"
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        input_path.write_text(json.dumps(_sample_evaluation()), encoding="utf-8")
+def test_generate_report_cli_writes_custom_output_path(monkeypatch) -> None:
+    payload = json.dumps(_sample_evaluation())
+    writes: dict[str, str] = {}
 
-        exit_code = generate_report_main([str(input_path), str(output_path)])
+    def fake_read_text(self: Path, encoding: str = "utf-8") -> str:
+        assert encoding == "utf-8"
+        assert str(self) == "evaluation.json"
+        return payload
 
-        assert exit_code == 0
-        assert output_path.exists()
-        assert "# Evaluation Report" in output_path.read_text(encoding="utf-8")
+    def fake_write_text(
+        self: Path,
+        text: str,
+        encoding: str = "utf-8",
+    ) -> int:
+        assert encoding == "utf-8"
+        writes[str(self)] = text
+        return len(text)
+
+    monkeypatch.setattr(Path, "read_text", fake_read_text)
+    monkeypatch.setattr(Path, "write_text", fake_write_text)
+
+    exit_code = generate_report_main(["evaluation.json", "nested/my_report.md"])
+
+    assert exit_code == 0
+    output_key = "nested\\my_report.md" if "nested\\my_report.md" in writes else "nested/my_report.md"
+    assert output_key in writes
+    assert "# Evaluation Report" in writes[output_key]
