@@ -143,6 +143,14 @@ Minimum report contract:
 | `cluster_sizes` | dict[str, int] | Cluster ID to size |
 | `labels` | dict[str, str] | Cluster ID to canonical label |
 
+Extended cluster stats (optional nested block):
+
+| Field | Type | Notes |
+|---|---|---|
+| `cluster_stats.total_clusters` | int | Total distinct clusters (same as `num_clusters`) |
+| `cluster_stats.avg_cluster_size` | float | Average records per cluster (`num_records / num_clusters`) |
+| `cluster_stats.largest_cluster` | int | Largest cluster size by record count |
+
 Example:
 
 ```json
@@ -150,7 +158,12 @@ Example:
   "num_records": 1000,
   "num_clusters": 120,
   "cluster_sizes": {"0": 42, "1": 18},
-  "labels": {"0": "white hanging heart candle holder", "1": "party bunting set"}
+  "labels": {"0": "white hanging heart candle holder", "1": "party bunting set"},
+  "cluster_stats": {
+    "total_clusters": 120,
+    "avg_cluster_size": 8.333333333333334,
+    "largest_cluster": 42
+  }
 }
 ```
 
