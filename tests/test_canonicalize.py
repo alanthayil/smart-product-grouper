@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from src.canonicalize import canonicalize
+from src.canonicalize import canonicalize, canonicalize_with_confidence
 from src.cluster import cluster
 from src.extract import extract
 from src.normalize import normalize
@@ -288,3 +288,148 @@ def test_canonicalize_tie_after_cleaning_uses_lexicographic_order() -> None:
     ]
 
     assert canonicalize(clusters) == {3: "alpha mug"}
+
+
+def test_canonicalize_with_confidence_preserves_label_output() -> None:
+    clusters = [
+        {
+            "record_id": "r0",
+            "cluster_id": 0,
+            "description_norm": "white ceramic mug",
+            "feature_vector": [1.0, 0.0],
+            "unit_value": 350.0,
+            "unit_name": "ml",
+            "unit_system": "metric",
+            "stock_code": "MUG-350",
+        },
+        {
+            "record_id": "r1",
+            "cluster_id": 0,
+            "description_norm": "white ceramic mug",
+            "feature_vector": [0.99, 0.01],
+            "unit_value": 350.0,
+            "unit_name": "ml",
+            "unit_system": "metric",
+            "stock_code": "MUG-350",
+        },
+    ]
+
+    labels = canonicalize(clusters)
+    labels_with_confidence, confidences = canonicalize_with_confidence(clusters)
+
+    assert labels_with_confidence == labels
+    assert set(confidences) == set(labels)
+
+
+def test_canonicalize_with_confidence_penalizes_missing_attributes() -> None:
+    clusters = [
+        {
+            "record_id": "good-0",
+            "cluster_id": 0,
+            "description_norm": "sparkling water",
+            "feature_vector": [1.0, 0.0],
+            "unit_value": 500.0,
+            "unit_name": "ml",
+            "unit_system": "metric",
+            "stock_code": "WATER-500",
+        },
+        {
+            "record_id": "good-1",
+            "cluster_id": 0,
+            "description_norm": "sparkling water",
+            "feature_vector": [0.98, 0.02],
+            "unit_value": 500.0,
+            "unit_name": "ml",
+            "unit_system": "metric",
+            "stock_code": "WATER-500",
+        },
+        {
+            "record_id": "bad-0",
+            "cluster_id": 1,
+            "description_norm": "sparkling water",
+            "feature_vector": [1.0, 0.0],
+            "unit_value": 500.0,
+            "unit_name": None,
+            "unit_system": "metric",
+            "stock_code": "WATER-500",
+        },
+        {
+            "record_id": "bad-1",
+            "cluster_id": 1,
+            "description_norm": "sparkling water",
+            "feature_vector": [0.98, 0.02],
+            "unit_value": 500.0,
+            "unit_name": None,
+            "unit_system": "metric",
+            "stock_code": "WATER-500",
+        },
+    ]
+
+    _, confidences = canonicalize_with_confidence(clusters)
+    assert confidences[0] > confidences[1]
+
+
+def test_canonicalize_with_confidence_reflects_similarity_mean() -> None:
+    clusters = [
+        {
+            "record_id": "high-0",
+            "cluster_id": 0,
+            "description_norm": "alpha item",
+            "feature_vector": [1.0, 0.0],
+            "unit_value": 250.0,
+            "unit_name": "g",
+            "unit_system": "metric",
+            "stock_code": "ALPHA-250",
+        },
+        {
+            "record_id": "high-1",
+            "cluster_id": 0,
+            "description_norm": "alpha item",
+            "feature_vector": [0.99, 0.01],
+            "unit_value": 250.0,
+            "unit_name": "g",
+            "unit_system": "metric",
+            "stock_code": "ALPHA-250",
+        },
+        {
+            "record_id": "low-0",
+            "cluster_id": 1,
+            "description_norm": "beta item",
+            "feature_vector": [1.0, 0.0],
+            "unit_value": 250.0,
+            "unit_name": "g",
+            "unit_system": "metric",
+            "stock_code": "BETA-250",
+        },
+        {
+            "record_id": "low-1",
+            "cluster_id": 1,
+            "description_norm": "beta item",
+            "feature_vector": [-1.0, 0.0],
+            "unit_value": 250.0,
+            "unit_name": "g",
+            "unit_system": "metric",
+            "stock_code": "BETA-250",
+        },
+    ]
+
+    _, confidences = canonicalize_with_confidence(clusters)
+    assert confidences[0] > confidences[1]
+
+
+def test_canonicalize_with_confidence_singleton_is_deterministic() -> None:
+    clusters = [
+        {
+            "record_id": "solo",
+            "cluster_id": 7,
+            "description_norm": "single item",
+            "feature_vector": [0.1, 0.2, 0.3],
+            "unit_value": 100.0,
+            "unit_name": "ml",
+            "unit_system": "metric",
+            "stock_code": "SINGLE-100",
+        }
+    ]
+
+    _, confidences = canonicalize_with_confidence(clusters)
+    assert confidences == {7: 1.0}
