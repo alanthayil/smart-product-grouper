@@ -142,6 +142,7 @@ Minimum report contract:
 | `num_clusters` | int | Distinct cluster count |
 | `cluster_sizes` | dict[str, int] | Cluster ID to size |
 | `labels` | dict[str, str] | Cluster ID to canonical label |
+| `suspect_clusters` | list[dict] | Clusters flagged for mixed attributes |
 
 Extended cluster stats (optional nested block):
 
@@ -150,6 +151,20 @@ Extended cluster stats (optional nested block):
 | `cluster_stats.total_clusters` | int | Total distinct clusters (same as `num_clusters`) |
 | `cluster_stats.avg_cluster_size` | float | Average records per cluster (`num_records / num_clusters`) |
 | `cluster_stats.largest_cluster` | int | Largest cluster size by record count |
+
+Suspect cluster entry schema:
+
+| Field | Type | Notes |
+|---|---|---|
+| `cluster_id` | string | Cluster ID that is flagged |
+| `reasons` | list[string] | One or more reason codes |
+| `size` | int | Number of records in the cluster |
+
+Reason codes:
+- `stock_code_mixed`: cluster has multiple distinct non-empty `stock_code` values.
+- `unit_name_mixed`: cluster has multiple distinct non-empty `unit_name` values.
+- `unit_system_mixed`: cluster has multiple distinct non-empty `unit_system` values.
+- `unit_value_mixed`: cluster has multiple distinct normalized `unit_value` values.
 
 Example:
 
@@ -163,7 +178,14 @@ Example:
     "total_clusters": 120,
     "avg_cluster_size": 8.333333333333334,
     "largest_cluster": 42
-  }
+  },
+  "suspect_clusters": [
+    {
+      "cluster_id": "1",
+      "reasons": ["stock_code_mixed", "unit_value_mixed"],
+      "size": 18
+    }
+  ]
 }
 ```
 
