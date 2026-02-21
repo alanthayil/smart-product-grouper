@@ -3,11 +3,23 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import re
+
+_WHITESPACE_RUNS = re.compile(r"\s+")
+
+
+def _clean_description_norm(value: object) -> str:
+    """Normalize description text for fallback-name selection."""
+    normalized = _WHITESPACE_RUNS.sub(" ", str(value or "").strip().lower())
+    return normalized.strip()
 
 
 def _pick_base_description(records: list[dict]) -> str:
     """Pick the most frequent normalized description (stable ties)."""
-    descriptions = [str(record.get("description_norm", "")).strip() for record in records]
+    descriptions = [
+        _clean_description_norm(record.get("description_norm", ""))
+        for record in records
+    ]
     counts = Counter(descriptions)
     if not counts:
         return ""

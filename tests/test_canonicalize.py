@@ -225,3 +225,66 @@ def test_phase5_pipeline_falls_back_to_description_when_units_conflict() -> None
     clustered = cluster(features)
 
     assert canonicalize(clustered) == {0: "sparkling water 500 ml bottle"}
+
+
+def test_canonicalize_missing_attributes_picks_most_frequent_cleaned_name() -> None:
+    clusters = [
+        {
+            "record_id": "r0",
+            "cluster_id": 0,
+            "description_norm": "  White   Ceramic   Mug ",
+            "unit_value": 350.0,
+            "unit_name": None,
+        },
+        {
+            "record_id": "r1",
+            "cluster_id": 0,
+            "description_norm": "white ceramic mug",
+            "unit_value": 350.0,
+            "unit_name": None,
+        },
+        {
+            "record_id": "r2",
+            "cluster_id": 0,
+            "description_norm": "white coffee mug",
+            "unit_value": 350.0,
+            "unit_name": None,
+        },
+    ]
+
+    assert canonicalize(clusters) == {0: "white ceramic mug"}
+
+
+def test_canonicalize_tie_after_cleaning_uses_lexicographic_order() -> None:
+    clusters = [
+        {
+            "record_id": "r0",
+            "cluster_id": 3,
+            "description_norm": "  Beta    Mug ",
+            "unit_value": None,
+            "unit_name": None,
+        },
+        {
+            "record_id": "r1",
+            "cluster_id": 3,
+            "description_norm": "alpha mug",
+            "unit_value": None,
+            "unit_name": None,
+        },
+        {
+            "record_id": "r2",
+            "cluster_id": 3,
+            "description_norm": "beta mug",
+            "unit_value": None,
+            "unit_name": None,
+        },
+        {
+            "record_id": "r3",
+            "cluster_id": 3,
+            "description_norm": "  Alpha   Mug  ",
+            "unit_value": None,
+            "unit_name": None,
+        },
+    ]
+
+    assert canonicalize(clusters) == {3: "alpha mug"}
