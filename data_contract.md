@@ -143,6 +143,7 @@ Minimum report contract:
 | `cluster_sizes` | dict[str, int] | Cluster ID to size |
 | `labels` | dict[str, str] | Cluster ID to canonical label |
 | `suspect_clusters` | list[dict] | Clusters flagged for mixed attributes |
+| `unmatched_tokens` | list[dict] | Ranked unmatched token candidates for synonym expansion |
 
 Extended cluster stats (optional nested block):
 
@@ -159,6 +160,13 @@ Suspect cluster entry schema:
 | `cluster_id` | string | Cluster ID that is flagged |
 | `reasons` | list[string] | One or more reason codes |
 | `size` | int | Number of records in the cluster |
+
+Unmatched token entry schema:
+
+| Field | Type | Notes |
+|---|---|---|
+| `token` | string | Candidate token not currently covered by synonyms |
+| `count` | int | Frequency across cleaned raw descriptions |
 
 Reason codes:
 - `stock_code_mixed`: cluster has multiple distinct non-empty `stock_code` values.
@@ -179,6 +187,10 @@ Example:
     "avg_cluster_size": 8.333333333333334,
     "largest_cluster": 42
   },
+  "unmatched_tokens": [
+    {"token": "anchor", "count": 15},
+    {"token": "rivet", "count": 9}
+  ],
   "suspect_clusters": [
     {
       "cluster_id": "1",

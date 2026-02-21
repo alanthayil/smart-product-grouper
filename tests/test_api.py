@@ -93,6 +93,7 @@ def test_cluster_endpoint_accepts_valid_xlsx(monkeypatch) -> None:
         "labels",
         "cluster_stats",
         "suspect_clusters",
+        "unmatched_tokens",
     }
 
 
@@ -227,3 +228,65 @@ def test_cluster_endpoint_returns_risk_and_explanation_in_suspects(monkeypatch) 
     payload = response.json()
     assert payload["suspect_clusters"][0]["risk_score"] == 0.175
     assert "detected stock_code_mixed" in payload["suspect_clusters"][0]["explanation"]
+
+
+def test_cluster_endpoint_includes_ranked_unmatched_tokens(monkeypatch) -> None:
+    client = TestClient(app)
+
+    monkeypatch.setattr(
+        "src.api.ingest",
+        lambda _path: [
+            {"Description": "Anchor rivet 2oz pack"},
+            {"Description": "Rivet anchor pro"},
+            {"Description": "Anchor and clamp"},
+        ],
+    )
+    monkeypatch.setattr(
+        "src.api.normalize",
+        lambda raw_records: [
+            {
+                "description": str(row.get("Description", "")).lower(),
+                "unit_value": None,
+                "unit_name": None,
+                "unit_system": None,
+            }
+            for row in raw_records
+        ],
+    )
+    monkeypatch.setattr("src.api.extract", lambda records: records)
+    monkeypatch.setattr("src.api.cluster", lambda records: records)
+    monkeypatch.setattr("src.api.canonicalize", lambda clusters: {0: "item"})
+    monkeypatch.setattr(
+        "src.api.evaluate",
+        lambda clusters, labels: {
+            "num_records": len(clusters),
+            "num_clusters": 1,
+            "cluster_sizes": {"0": len(clusters)},
+            "labels": {"0": "item"},
+            "cluster_stats": {
+                "total_clusters": 1,
+                "avg_cluster_size": float(len(clusters)),
+                "largest_cluster": len(clusters),
+            },
+            "suspect_clusters": [],
+        },
+    )
+
+    response = client.post(
+        "/cluster",
+        files={
+            "file": (
+                "demo.xlsx",
+                _build_workbook_bytes(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["unmatched_tokens"] == [
+        {"token": "anchor", "count": 3},
+        {"token": "rivet", "count": 2},
+        {"token": "clamp", "count": 1},
+        {"token": "pro", "count": 1},
+    ]

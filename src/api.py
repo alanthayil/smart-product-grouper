@@ -19,6 +19,7 @@ from src.evaluate import evaluate
 from src.extract import extract
 from src.ingest import ingest
 from src.normalize import normalize
+from src.synonym_suggestions import analyze_unmatched_tokens
 
 app = FastAPI(title="Smart Product Grouper API", version="0.1.0")
 INVALID_XLSX_DETAIL = (
@@ -81,6 +82,7 @@ async def _run_pipeline_from_upload(file: UploadFile) -> dict:
             labels = canonicalize(clusters)
             stage = "evaluate"
             evaluation = evaluate(clusters, labels)
+            evaluation["unmatched_tokens"] = analyze_unmatched_tokens(raw)
             return evaluation
         except ValueError as exc:
             if "OPENAI_API_KEY" in str(exc):
