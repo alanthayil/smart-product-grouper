@@ -10,6 +10,11 @@ from fastapi.testclient import TestClient
 from src.api import app
 from src.ingest import RETAIL_COLUMNS, RETAIL_SHEETS
 
+INVALID_XLSX_DETAIL = (
+    "Invalid xlsx file upload. Please provide a valid .xlsx workbook "
+    "with required sheets/columns."
+)
+
 
 def _build_workbook_bytes() -> bytes:
     row = {
@@ -23,6 +28,15 @@ def _build_workbook_bytes() -> bytes:
         "Country": "United Kingdom",
     }
     df = pd.DataFrame([row], columns=RETAIL_COLUMNS)
+    payload = BytesIO()
+    with pd.ExcelWriter(payload, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name=RETAIL_SHEETS[0], index=False)
+        df.to_excel(writer, sheet_name=RETAIL_SHEETS[1], index=False)
+    return payload.getvalue()
+
+
+def _build_workbook_bytes_missing_columns() -> bytes:
+    df = pd.DataFrame([{"Invoice": "536365"}])
     payload = BytesIO()
     with pd.ExcelWriter(payload, engine="openpyxl") as writer:
         df.to_excel(writer, sheet_name=RETAIL_SHEETS[0], index=False)
@@ -93,4 +107,20 @@ def test_cluster_endpoint_rejects_malformed_workbook() -> None:
         files={"file": ("broken.xlsx", b"not really an xlsx", "application/octet-stream")},
     )
     assert response.status_code == 400
-    assert response.json()["detail"].startswith("Invalid xlsx file:")
+    assert response.json()["detail"] == INVALID_XLSX_DETAIL
+
+
+def test_cluster_endpoint_rejects_workbook_missing_required_columns() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/cluster",
+        files={
+            "file": (
+                "missing_columns.xlsx",
+                _build_workbook_bytes_missing_columns(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == INVALID_XLSX_DETAIL

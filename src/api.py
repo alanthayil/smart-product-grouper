@@ -40,7 +40,13 @@ async def cluster_from_xlsx(file: UploadFile = File(...)) -> dict:
             stage = "ingest"
             raw = ingest(temp_path)
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"Invalid xlsx file: {exc}") from exc
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Invalid xlsx file upload. Please provide a valid .xlsx workbook "
+                    "with required sheets/columns."
+                ),
+            ) from exc
 
         try:
             stage = "normalize"
