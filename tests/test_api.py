@@ -181,3 +181,49 @@ def test_cluster_view_endpoint_rejects_malformed_workbook() -> None:
     )
     assert response.status_code == 400
     assert response.json()["detail"] == INVALID_XLSX_DETAIL
+
+
+def test_cluster_endpoint_returns_risk_and_explanation_in_suspects(monkeypatch) -> None:
+    client = TestClient(app)
+
+    monkeypatch.setattr("src.api.extract", lambda records: records)
+    monkeypatch.setattr("src.api.cluster", lambda records: records)
+    monkeypatch.setattr("src.api.canonicalize", lambda clusters: {0: "item"})
+    monkeypatch.setattr(
+        "src.api.evaluate",
+        lambda clusters, labels: {
+            "num_records": 2,
+            "num_clusters": 1,
+            "cluster_sizes": {"0": 2},
+            "labels": {"0": "item"},
+            "cluster_stats": {"total_clusters": 1, "avg_cluster_size": 2.0, "largest_cluster": 2},
+            "suspect_clusters": [
+                {
+                    "cluster_id": "0",
+                    "reasons": ["stock_code_mixed"],
+                    "size": 2,
+                    "risk_score": 0.175,
+                    "explanation": (
+                        "Low inconsistency risk (0.1750) for 'item': "
+                        "detected stock_code_mixed."
+                    ),
+                }
+            ],
+        },
+    )
+
+    response = client.post(
+        "/cluster",
+        files={
+            "file": (
+                "demo.xlsx",
+                _build_workbook_bytes(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["suspect_clusters"][0]["risk_score"] == 0.175
+    assert "detected stock_code_mixed" in payload["suspect_clusters"][0]["explanation"]

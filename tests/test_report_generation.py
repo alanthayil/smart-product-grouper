@@ -22,7 +22,16 @@ def _sample_evaluation() -> dict:
             "largest_cluster": 3,
         },
         "suspect_clusters": [
-            {"cluster_id": "1", "reasons": ["stock_code_mixed"], "size": 2}
+            {
+                "cluster_id": "1",
+                "reasons": ["stock_code_mixed"],
+                "size": 2,
+                "risk_score": 0.175,
+                "explanation": (
+                    "Low inconsistency risk (0.1750) for 'item b': "
+                    "detected stock_code_mixed."
+                ),
+            }
         ],
     }
 
@@ -39,7 +48,8 @@ def test_render_evaluation_report_includes_stats_and_suspects() -> None:
     assert "- Total clusters: 2" in report
     assert "- Average cluster size: 2.5" in report
     assert "- Largest cluster: 3" in report
-    assert "| 1 | 2 | stock_code_mixed |" in report
+    assert "| Cluster ID | Size | Risk Score | Reasons | Explanation |" in report
+    assert "| 1 | 2 | 0.1750 | stock_code_mixed |" in report
 
 
 def test_render_evaluation_report_shows_empty_state_for_no_suspects() -> None:

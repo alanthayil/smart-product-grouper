@@ -47,15 +47,17 @@ def render_evaluation_report(
 
     lines.extend(
         [
-            "| Cluster ID | Size | Reasons |",
-            "|---|---:|---|",
+            "| Cluster ID | Size | Risk Score | Reasons | Explanation |",
+            "|---|---:|---:|---|---|",
         ]
     )
     for suspect in suspect_clusters:
         cluster_id = str(suspect.get("cluster_id", ""))
         size = int(suspect.get("size", 0))
+        risk_score = float(suspect.get("risk_score", 0.0))
         reasons = ", ".join(str(reason) for reason in suspect.get("reasons", []))
-        lines.append(f"| {cluster_id} | {size} | {reasons} |")
+        explanation = str(suspect.get("explanation", ""))
+        lines.append(f"| {cluster_id} | {size} | {risk_score:.4f} | {reasons} | {explanation} |")
 
     lines.append("")
     return "\n".join(lines)

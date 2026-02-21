@@ -1,6 +1,9 @@
 """Evaluate clustering and canonical labels; produce report."""
 
 
+from src.cluster_critic import analyze_cluster
+
+
 def _normalized_optional_text(value: object) -> str:
     """Normalize optional text-like values for conflict checks."""
     return str(value or "").strip().lower()
@@ -82,11 +85,14 @@ def evaluate(clusters, canonical_labels):
         reasons = _suspect_reasons(records)
         if not reasons:
             continue
+        critic_result = analyze_cluster(records, labels.get(cluster_id))
         suspect_clusters.append(
             {
                 "cluster_id": cluster_id,
                 "reasons": reasons,
                 "size": len(records),
+                "risk_score": critic_result["risk_score"],
+                "explanation": critic_result["explanation"],
             }
         )
 

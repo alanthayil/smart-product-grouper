@@ -72,7 +72,16 @@ def test_evaluate_flags_stock_code_mixed_cluster() -> None:
     report = evaluate(clusters, {0: "item x"})
 
     assert report["suspect_clusters"] == [
-        {"cluster_id": "0", "reasons": ["stock_code_mixed"], "size": 2}
+        {
+            "cluster_id": "0",
+            "reasons": ["stock_code_mixed"],
+            "size": 2,
+            "risk_score": 0.175,
+            "explanation": (
+                "Low inconsistency risk (0.1750) for 'item x': "
+                "detected stock_code_mixed."
+            ),
+        }
     ]
 
 
@@ -101,7 +110,16 @@ def test_evaluate_flags_unit_mixed_cluster() -> None:
     report = evaluate(clusters, {1: "oil"})
 
     assert report["suspect_clusters"] == [
-        {"cluster_id": "1", "reasons": ["unit_value_mixed"], "size": 2}
+        {
+            "cluster_id": "1",
+            "reasons": ["unit_value_mixed"],
+            "size": 2,
+            "risk_score": 0.175,
+            "explanation": (
+                "Low inconsistency risk (0.1750) for 'oil': "
+                "detected unit_value_mixed."
+            ),
+        }
     ]
 
 
@@ -170,5 +188,11 @@ def test_evaluate_combines_multiple_mixed_reasons_for_cluster() -> None:
                 "unit_value_mixed",
             ],
             "size": 2,
+            "risk_score": 0.7,
+            "explanation": (
+                "High inconsistency risk (0.7000) for 'mix': "
+                "detected stock_code_mixed, unit_name_mixed, unit_system_mixed, "
+                "unit_value_mixed."
+            ),
         }
     ]
