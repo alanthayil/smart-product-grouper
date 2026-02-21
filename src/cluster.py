@@ -1,4 +1,4 @@
-"""Nearest-neighbor similarity search over extracted feature vectors."""
+"""Clustering logic using cosine similarity and attribute matching."""
 
 from __future__ import annotations
 
@@ -33,13 +33,59 @@ def _pairwise_cosine_similarity(vectors: list[list[float]]) -> list[list[float]]
     return similarities
 
 
+def _normalized_optional(value: object) -> str:
+    """Normalize optional text-like values for null-safe comparisons."""
+    return str(value or "").strip().lower()
+
+
+def _attributes_match(record_a: dict, record_b: dict) -> bool:
+    """Apply hybrid stock-code / unit attribute matching rule."""
+    stock_a = _normalized_optional(record_a.get("stock_code"))
+    stock_b = _normalized_optional(record_b.get("stock_code"))
+    if stock_a and stock_b:
+        return stock_a == stock_b
+
+    unit_name_a = _normalized_optional(record_a.get("unit_name"))
+    unit_name_b = _normalized_optional(record_b.get("unit_name"))
+    unit_system_a = _normalized_optional(record_a.get("unit_system"))
+    unit_system_b = _normalized_optional(record_b.get("unit_system"))
+    return (
+        bool(unit_name_a)
+        and bool(unit_system_a)
+        and unit_name_a == unit_name_b
+        and unit_system_a == unit_system_b
+    )
+
+
+def _build_connected_components(adjacency: list[set[int]]) -> list[int]:
+    """Return deterministic component IDs for each node index."""
+    cluster_ids = [-1] * len(adjacency)
+    visited: set[int] = set()
+    next_cluster_id = 0
+
+    for seed in range(len(adjacency)):
+        if seed in visited:
+            continue
+        stack = [seed]
+        visited.add(seed)
+        while stack:
+            node = stack.pop()
+            cluster_ids[node] = next_cluster_id
+            for neighbor in sorted(adjacency[node]):
+                if neighbor in visited:
+                    continue
+                visited.add(neighbor)
+                stack.append(neighbor)
+        next_cluster_id += 1
+    return cluster_ids
+
+
 def cluster(
     records_or_features: list[dict],
     *,
-    top_k: int = 5,
-    similarity_threshold: float = 0.80,
+    similarity_threshold: float = 0.85,
 ) -> list[dict]:
-    """Return top-k cosine neighbors for each feature record."""
+    """Assign cluster IDs from pairwise similarity and attribute gates."""
     if not records_or_features:
         return []
 
@@ -49,29 +95,26 @@ def cluster(
     ]
     similarities = _pairwise_cosine_similarity(vectors)
 
-    results: list[dict] = []
-    for source_index, record in enumerate(records_or_features):
-        ranked_candidates: list[tuple[float, int, str]] = []
-        for target_index, similarity in enumerate(similarities[source_index]):
-            if source_index == target_index:
-                continue
+    adjacency: list[set[int]] = [set() for _ in records_or_features]
+    for source_index in range(len(records_or_features)):
+        for target_index in range(source_index + 1, len(records_or_features)):
+            similarity = similarities[source_index][target_index]
             if similarity < similarity_threshold:
                 continue
+            source_record = records_or_features[source_index]
             target_record = records_or_features[target_index]
-            target_record_id = str(target_record.get("record_id", f"record-{target_index}"))
-            ranked_candidates.append((similarity, target_index, target_record_id))
+            if not _attributes_match(source_record, target_record):
+                continue
+            adjacency[source_index].add(target_index)
+            adjacency[target_index].add(source_index)
 
-        ranked_candidates.sort(key=lambda item: (-item[0], item[1], item[2]))
-        neighbors = [
-            {"record_id": record_id, "similarity": similarity}
-            for similarity, _, record_id in ranked_candidates[:top_k]
-        ]
-
-        result_record = {
-            "record_id": str(record.get("record_id", f"record-{source_index}")),
+    cluster_ids = _build_connected_components(adjacency)
+    return [
+        {
+            "record_id": str(record.get("record_id", f"record-{index}")),
+            "cluster_id": cluster_ids[index],
             "description_norm": str(record.get("description_norm", "")),
-            "feature_vector": vectors[source_index],
-            "neighbors": neighbors,
+            "feature_vector": vectors[index],
         }
-        results.append(result_record)
-    return results
+        for index, record in enumerate(records_or_features)
+    ]
