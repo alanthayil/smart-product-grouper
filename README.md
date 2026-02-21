@@ -31,6 +31,17 @@ Or step by step:
 
 All targets use the conda env `datamining` via `conda run`. Or activate `datamining` and run `python run.py data/online_retail_II.xlsx`, `pytest tests/ -v`, `ruff check src/` directly.
 
+## API demo (`POST /cluster`)
+
+1. Install dependencies: `pip install -r requirements.txt`
+2. Start server: `python serve.py`
+3. Upload an xlsx and get JSON:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/cluster" \
+  -F "file=@data/online_retail_II.xlsx"
+```
+
 ## Project layout
 
 | Path | Role |
@@ -41,6 +52,8 @@ All targets use the conda env `datamining` via `conda run`. Or activate `datamin
 | `src/cluster.py` | Group products into clusters |
 | `src/canonicalize.py` | Produce canonical labels per cluster |
 | `src/evaluate.py` | Evaluate and build report |
+| `src/api.py` | FastAPI endpoint for xlsx upload clustering |
+| `serve.py` | Uvicorn server entrypoint for API demo |
 | `tests/` | Tests |
 | `data/` | Put `online_retail_II.xlsx` here |
 
