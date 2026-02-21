@@ -189,6 +189,32 @@ Example:
 }
 ```
 
+### 2.5 Markdown evaluation report artifact
+
+Task 7.3 adds a human-readable markdown report generated from an existing
+evaluation JSON payload.
+
+Artifact:
+- `evaluation_report.md` (default output path)
+
+Generation command:
+- `python generate_report.py <evaluation_json_path> [output_path]`
+- If `output_path` is omitted, the file is written to `evaluation_report.md`
+  in the current working directory.
+
+Expected source JSON keys:
+- `num_records`
+- `num_clusters`
+- `cluster_stats.total_clusters`
+- `cluster_stats.avg_cluster_size`
+- `cluster_stats.largest_cluster`
+- `suspect_clusters`
+
+Markdown sections:
+- `# Evaluation Report`
+- `## Key Stats`
+- `## Suspect Clusters` (with table rows when present, or empty-state text)
+
 ## 3) Cluster Schema
 
 ### 3.1 Clustered record contract
