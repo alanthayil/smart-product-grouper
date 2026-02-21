@@ -49,12 +49,19 @@ def _attributes_match(record_a: dict, record_b: dict) -> bool:
     unit_name_b = _normalized_optional(record_b.get("unit_name"))
     unit_system_a = _normalized_optional(record_a.get("unit_system"))
     unit_system_b = _normalized_optional(record_b.get("unit_system"))
-    return (
+    if not (
         bool(unit_name_a)
         and bool(unit_system_a)
         and unit_name_a == unit_name_b
         and unit_system_a == unit_system_b
-    )
+    ):
+        return False
+
+    unit_value_a = record_a.get("unit_value")
+    unit_value_b = record_b.get("unit_value")
+    if unit_value_a is not None and unit_value_b is not None:
+        return float(unit_value_a) == float(unit_value_b)
+    return True
 
 
 def _build_connected_components(adjacency: list[set[int]]) -> list[int]:

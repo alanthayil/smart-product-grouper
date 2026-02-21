@@ -159,3 +159,100 @@ def test_cluster_raises_for_mismatched_vector_dimensions() -> None:
 
     with pytest.raises(ValueError, match="same dimension"):
         cluster(records)
+
+
+def test_similar_items_are_grouped() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "white ceramic mug",
+            "feature_vector": [1.0, 0.0],
+            "unit_name": "ml",
+            "unit_system": "metric",
+            "unit_value": 350.0,
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "white coffee mug",
+            "feature_vector": [0.96, 0.04],
+            "unit_name": "ml",
+            "unit_system": "metric",
+            "unit_value": 350.0,
+        },
+    ]
+
+    result = cluster(records)
+
+    assert [record["cluster_id"] for record in result] == [0, 0]
+
+
+def test_different_size_items_are_separated() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "olive oil bottle 500 ml",
+            "feature_vector": [1.0, 0.0],
+            "unit_name": "ml",
+            "unit_system": "metric",
+            "unit_value": 500.0,
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "olive oil bottle 1000 ml",
+            "feature_vector": [0.96, 0.04],
+            "unit_name": "ml",
+            "unit_system": "metric",
+            "unit_value": 1000.0,
+        },
+    ]
+
+    result = cluster(records)
+
+    assert [record["cluster_id"] for record in result] == [0, 1]
+
+
+@pytest.mark.parametrize(
+    ("left", "right"),
+    [
+        (
+            {
+                "record_id": "r0",
+                "description_norm": "powder pack g",
+                "feature_vector": [1.0, 0.0],
+                "unit_name": "g",
+                "unit_system": "metric",
+                "unit_value": 250.0,
+            },
+            {
+                "record_id": "r1",
+                "description_norm": "powder pack ml",
+                "feature_vector": [0.96, 0.04],
+                "unit_name": "ml",
+                "unit_system": "metric",
+                "unit_value": 250.0,
+            },
+        ),
+        (
+            {
+                "record_id": "r0",
+                "description_norm": "flour bag metric",
+                "feature_vector": [1.0, 0.0],
+                "unit_name": "g",
+                "unit_system": "metric",
+                "unit_value": 500.0,
+            },
+            {
+                "record_id": "r1",
+                "description_norm": "flour bag imperial",
+                "feature_vector": [0.96, 0.04],
+                "unit_name": "g",
+                "unit_system": "imperial",
+                "unit_value": 500.0,
+            },
+        ),
+    ],
+)
+def test_different_standard_items_are_separated(left: dict, right: dict) -> None:
+    result = cluster([left, right])
+
+    assert [record["cluster_id"] for record in result] == [0, 1]
