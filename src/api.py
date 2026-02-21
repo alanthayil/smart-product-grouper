@@ -6,6 +6,7 @@ import os
 from tempfile import NamedTemporaryFile
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import HTMLResponse
 try:
     from openai import RateLimitError
 except ImportError:  # pragma: no cover - defensive when optional dependency missing
@@ -19,6 +20,26 @@ from src.ingest import ingest
 from src.normalize import normalize
 
 app = FastAPI(title="Smart Product Grouper API", version="0.1.0")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def upload_form() -> str:
+    """Render a minimal browser upload form for .xlsx files."""
+    return """<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Smart Product Grouper</title>
+  </head>
+  <body>
+    <h1>Upload .xlsx file</h1>
+    <form method="post" action="/cluster" enctype="multipart/form-data">
+      <input type="file" name="file" accept=".xlsx" required />
+      <button type="submit">Cluster</button>
+    </form>
+  </body>
+</html>
+"""
 
 
 @app.post("/cluster")

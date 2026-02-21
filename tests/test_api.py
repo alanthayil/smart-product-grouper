@@ -16,6 +16,18 @@ INVALID_XLSX_DETAIL = (
 )
 
 
+def test_upload_form_route_renders_minimal_html() -> None:
+    client = TestClient(app)
+    response = client.get("/")
+
+    assert response.status_code == 200
+    body = response.text
+    assert "<form" in body
+    assert 'action="/cluster"' in body
+    assert 'enctype="multipart/form-data"' in body
+    assert 'name="file"' in body
+
+
 def _build_workbook_bytes() -> bytes:
     row = {
         "Invoice": "536365",
