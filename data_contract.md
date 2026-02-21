@@ -72,7 +72,7 @@ Target normalized record fields:
 |---|---|---|
 | `invoice` | string | Normalized from `Invoice` |
 | `stock_code` | string | Normalized from `StockCode` |
-| `description` | string | Cleaned text from `Description` |
+| `description` | string | Cleaned and synonym-canonicalized text from `Description` |
 | `quantity` | int | Parsed from `Quantity` |
 | `invoice_ts` | string (ISO-8601) | Parsed from `InvoiceDate` |
 | `price` | float | Parsed from `Price` |
@@ -104,6 +104,11 @@ Unit canonicalization rules in normalization:
 - Mass is stored as `g` (`kg`, `oz`, `lb` convert to grams).
 - Volume is stored as `ml` (`l` converts to milliliters).
 - Converted values are rounded to 3 decimal places.
+
+Synonym canonicalization rules in normalization:
+- Known variants are replaced with canonical terms from `synonyms.yml`.
+- Matching supports both whole-word and multi-word phrase replacements.
+- Replacements run after text cleanup so matching is case-insensitive and deterministic.
 
 ### 2.3 Feature record shape (extract output)
 

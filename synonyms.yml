@@ -1,0 +1,14 @@
+{
+  "canonical_to_variants": {
+    "bolt": ["screw", "fastener bolt", "machine screw"],
+    "hexagon": ["hex", "hex head", "hexagonal"]
+  },
+  "variant_to_canonical": {
+    "screw": "bolt",
+    "machine screw": "bolt",
+    "fastener bolt": "bolt",
+    "hex": "hexagon",
+    "hex head": "hexagon",
+    "hexagonal": "hexagon"
+  }
+}

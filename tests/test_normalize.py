@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.normalize import _clean_text, _extract_unit_info, normalize
+from src.normalize import _apply_synonyms, _clean_text, _extract_unit_info, normalize
 
 
 @pytest.mark.parametrize(
@@ -89,6 +89,37 @@ def test_normalize_formats_units_and_extracts_structured_fields() -> None:
             "description": "premium olive oil 1 l bottle",
             "unit_value": 1000.0,
             "unit_name": "ml",
+            "unit_system": "metric",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("steel screw set", "steel bolt set"),
+        ("hex head screw", "hexagon bolt"),
+        ("hex screw 2oz", "hexagon bolt 2oz"),
+    ],
+)
+def test_apply_synonyms_for_words_and_phrases(text: str, expected: str) -> None:
+    assert _apply_synonyms(text) == expected
+
+
+def test_apply_synonyms_respects_word_boundaries() -> None:
+    assert _apply_synonyms("hexagonalizer tool") == "hexagonalizer tool"
+
+
+def test_normalize_applies_synonyms_and_preserves_unit_extraction() -> None:
+    records = [{"Description": "HEX HEAD SCREW 2oz pack"}]
+
+    normalized = normalize(records)
+
+    assert normalized == [
+        {
+            "description": "hexagon bolt 2 oz pack",
+            "unit_value": 56.699,
+            "unit_name": "g",
             "unit_system": "metric",
         }
     ]
