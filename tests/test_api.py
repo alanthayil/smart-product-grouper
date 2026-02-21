@@ -23,7 +23,7 @@ def test_upload_form_route_renders_minimal_html() -> None:
     assert response.status_code == 200
     body = response.text
     assert "<form" in body
-    assert 'action="/cluster"' in body
+    assert 'action="/cluster/view"' in body
     assert 'enctype="multipart/form-data"' in body
     assert 'name="file"' in body
 
@@ -133,6 +133,51 @@ def test_cluster_endpoint_rejects_workbook_missing_required_columns() -> None:
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         },
+    )
+    assert response.status_code == 400
+    assert response.json()["detail"] == INVALID_XLSX_DETAIL
+
+
+def test_cluster_view_endpoint_renders_cluster_table(monkeypatch) -> None:
+    client = TestClient(app)
+
+    def _fake_extract(records: list[dict]) -> list[dict]:
+        return [
+            {
+                "record_id": f"record-{index}",
+                "description_norm": str(record.get("description", "")),
+                "feature_vector": [1.0, 0.0],
+                "unit_value": record.get("unit_value"),
+                "unit_name": record.get("unit_name"),
+                "unit_system": record.get("unit_system"),
+            }
+            for index, record in enumerate(records)
+        ]
+
+    monkeypatch.setattr("src.api.extract", _fake_extract)
+    response = client.post(
+        "/cluster/view",
+        files={
+            "file": (
+                "demo.xlsx",
+                _build_workbook_bytes(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.text
+    assert "<table" in body
+    assert "Cluster ID" in body
+    assert "<td>0</td>" in body
+
+
+def test_cluster_view_endpoint_rejects_malformed_workbook() -> None:
+    client = TestClient(app)
+    response = client.post(
+        "/cluster/view",
+        files={"file": ("broken.xlsx", b"not really an xlsx", "application/octet-stream")},
     )
     assert response.status_code == 400
     assert response.json()["detail"] == INVALID_XLSX_DETAIL

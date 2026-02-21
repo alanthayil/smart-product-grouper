@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from html import escape
 import os
 from tempfile import NamedTemporaryFile
 
@@ -20,6 +21,10 @@ from src.ingest import ingest
 from src.normalize import normalize
 
 app = FastAPI(title="Smart Product Grouper API", version="0.1.0")
+INVALID_XLSX_DETAIL = (
+    "Invalid xlsx file upload. Please provide a valid .xlsx workbook "
+    "with required sheets/columns."
+)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -33,7 +38,7 @@ async def upload_form() -> str:
   </head>
   <body>
     <h1>Upload .xlsx file</h1>
-    <form method="post" action="/cluster" enctype="multipart/form-data">
+    <form method="post" action="/cluster/view" enctype="multipart/form-data">
       <input type="file" name="file" accept=".xlsx" required />
       <button type="submit">Cluster</button>
     </form>
@@ -42,9 +47,8 @@ async def upload_form() -> str:
 """
 
 
-@app.post("/cluster")
-async def cluster_from_xlsx(file: UploadFile = File(...)) -> dict:
-    """Accept an xlsx upload and return pipeline evaluation JSON."""
+async def _run_pipeline_from_upload(file: UploadFile) -> dict:
+    """Run pipeline for an uploaded workbook and return evaluation payload."""
     filename = (file.filename or "").strip()
     if not filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Expected a .xlsx file upload.")
@@ -63,10 +67,7 @@ async def cluster_from_xlsx(file: UploadFile = File(...)) -> dict:
         except Exception as exc:
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "Invalid xlsx file upload. Please provide a valid .xlsx workbook "
-                    "with required sheets/columns."
-                ),
+                detail=INVALID_XLSX_DETAIL,
             ) from exc
 
         try:
@@ -111,3 +112,65 @@ async def cluster_from_xlsx(file: UploadFile = File(...)) -> dict:
         await file.close()
         if temp_path and os.path.exists(temp_path):
             os.remove(temp_path)
+
+
+@app.post("/cluster")
+async def cluster_from_xlsx(file: UploadFile = File(...)) -> dict:
+    """Accept an xlsx upload and return pipeline evaluation JSON."""
+    return await _run_pipeline_from_upload(file)
+
+
+@app.post("/cluster/view", response_class=HTMLResponse)
+async def cluster_table_view(file: UploadFile = File(...)) -> str:
+    """Accept an xlsx upload and render clustered groups as an HTML table."""
+    evaluation = await _run_pipeline_from_upload(file)
+    cluster_sizes = evaluation.get("cluster_sizes", {})
+    labels = evaluation.get("labels", {})
+    suspect_clusters = evaluation.get("suspect_clusters", [])
+    suspect_by_id = {
+        str(entry.get("cluster_id")) for entry in suspect_clusters if entry.get("cluster_id") is not None
+    }
+
+    sorted_cluster_ids = sorted(cluster_sizes.keys(), key=int)
+    rows = []
+    for cluster_id in sorted_cluster_ids:
+        label = str(labels.get(cluster_id, ""))
+        size = cluster_sizes.get(cluster_id, 0)
+        suspect = "Yes" if cluster_id in suspect_by_id else "No"
+        rows.append(
+            "<tr>"
+            f"<td>{escape(str(cluster_id))}</td>"
+            f"<td>{escape(label)}</td>"
+            f"<td>{escape(str(size))}</td>"
+            f"<td>{suspect}</td>"
+            "</tr>"
+        )
+
+    table_rows = "".join(rows) or (
+        '<tr><td colspan="4">No clusters found.</td></tr>'
+    )
+    return f"""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Cluster Table View</title>
+  </head>
+  <body>
+    <h1>Cluster Groups</h1>
+    <table border="1" cellspacing="0" cellpadding="6">
+      <thead>
+        <tr>
+          <th>Cluster ID</th>
+          <th>Label</th>
+          <th>Size</th>
+          <th>Suspect</th>
+        </tr>
+      </thead>
+      <tbody>
+        {table_rows}
+      </tbody>
+    </table>
+    <p><a href="/">Upload another file</a></p>
+  </body>
+</html>
+"""

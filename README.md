@@ -35,8 +35,8 @@ All targets use the conda env `datamining` via `conda run`. Or activate `datamin
 
 1. Install dependencies: `pip install -r requirements.txt`
 2. Start server: `python serve.py`
-3. Browser upload flow: open `http://127.0.0.1:8000/`, choose an `.xlsx` file, and submit.
-4. Or upload with curl and get JSON:
+3. Browser upload flow: open `http://127.0.0.1:8000/`, choose an `.xlsx` file, and submit to view a cluster table.
+4. Programmatic JSON API remains at `POST /cluster` (for curl/clients):
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/cluster" \
