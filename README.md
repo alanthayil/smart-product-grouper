@@ -4,6 +4,17 @@
 
 Product data is ingested from Excel (.xlsx), normalized, clustered, assigned canonical labels, and summarized in a report.
 
+## Before/After examples (including messy raw text)
+
+| Before (raw descriptions) | After (canonical label) |
+|---|---|
+| `WHITE HANGING HEART T-LIGHT HOLDER` | `white hanging heart t light holder` |
+| `white   hanging heart   tlight holder!!!` | `white hanging heart t light holder` |
+| `JUMBO BAG RED RETROSPOT` | `jumbo bag red retrospot` |
+| `JUMBO--BAG red retro spot` | `jumbo bag red retrospot` |
+| `Sparkling Water Lemon 500ml` | `sparkling water lemon 500 ml 500 ml` |
+| `SPARKLING WATER  LEMON   0.5 L` | `sparkling water lemon 500 ml 500 ml` |
+
 ## Input data
 
 - **File:** `data/online_retail_II.xlsx` — place this file in `data/` for the default run.
@@ -76,3 +87,41 @@ curl -X POST "http://127.0.0.1:8000/cluster" \
 | `data/` | Put `online_retail_II.xlsx` here |
 
 Pipeline: **ingest** → **normalize** → **extract** → **cluster** → **canonicalize** → **evaluate** (report).
+
+## Architecture
+
+```mermaid
+flowchart LR
+  ingest[IngestXlsx] --> normalize[NormalizeRecords]
+  normalize --> extract[ExtractFeatures]
+  extract --> cluster[ClusterRecords]
+  cluster --> canonicalize[CanonicalizeLabels]
+  canonicalize --> evaluate[EvaluateReport]
+```
+
+## Agent layer
+
+This project does not implement a multi-agent orchestration framework.
+
+The practical "agent layer" is the embedding provider used during **extract**:
+- `src/extract.py` calls an embedding backend to convert normalized descriptions into vectors.
+- `src/embedding.py` provides `OpenAIEmbeddingProvider` (model: `text-embedding-3-small`).
+
+Downstream stages are deterministic pipeline steps:
+- **cluster** groups by feature similarity
+- **canonicalize** assigns cluster labels
+- **evaluate** computes report metrics and suspect-cluster explanations
+
+## Metrics
+
+The report includes these implemented metrics:
+
+- Core: `num_records`, `num_clusters`, `cluster_sizes`, `cluster_stats` (`total_clusters`, `avg_cluster_size`, `largest_cluster`)
+- Quality/risk: `suspect_clusters` entries with `cluster_id`, `reasons`, `size`, `risk_score`, `explanation`
+- Label output: `labels` mapping (`cluster_id` → canonical label)
+
+When running threshold auto-tuning (`--auto-tune-thresholds`), additional labeled-evaluation metrics are available:
+
+- `precision`, `recall`, `f1`
+- Pair-count diagnostics: `tp_pairs`, `fp_pairs`, `fn_pairs`, `num_common_records`
+- Sweep summary: `best_threshold`, `best_metrics`, `results`
