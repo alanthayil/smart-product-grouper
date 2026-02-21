@@ -78,6 +78,9 @@ Target normalized record fields:
 | `price` | float | Parsed from `Price` |
 | `customer_id` | string | Normalized from `Customer ID` |
 | `country` | string | Normalized from `Country` |
+| `unit_value` | float or null | Canonical metric unit value parsed from `description` |
+| `unit_name` | string or null | Canonical metric unit (`g` or `ml`) |
+| `unit_system` | string or null | Unit system label (`metric` when parsed) |
 
 Example:
 
@@ -85,14 +88,22 @@ Example:
 {
   "invoice": "536365",
   "stock_code": "85123A",
-  "description": "WHITE HANGING HEART T-LIGHT HOLDER",
+  "description": "white hanging heart t light holder 1 l",
   "quantity": 6,
   "invoice_ts": "2010-12-01T08:26:00",
   "price": 2.55,
   "customer_id": "17850",
-  "country": "United Kingdom"
+  "country": "United Kingdom",
+  "unit_value": 1000.0,
+  "unit_name": "ml",
+  "unit_system": "metric"
 }
 ```
+
+Unit canonicalization rules in normalization:
+- Mass is stored as `g` (`kg`, `oz`, `lb` convert to grams).
+- Volume is stored as `ml` (`l` converts to milliliters).
+- Converted values are rounded to 3 decimal places.
 
 ### 2.3 Feature record shape (extract output)
 
