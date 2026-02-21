@@ -116,12 +116,19 @@ def cluster(
             adjacency[target_index].add(source_index)
 
     cluster_ids = _build_connected_components(adjacency)
-    return [
-        {
+    clustered_records: list[dict] = []
+    for index, record in enumerate(records_or_features):
+        clustered_record: dict[str, object] = {
             "record_id": str(record.get("record_id", f"record-{index}")),
             "cluster_id": cluster_ids[index],
             "description_norm": str(record.get("description_norm", "")),
             "feature_vector": vectors[index],
         }
-        for index, record in enumerate(records_or_features)
-    ]
+        stock_code = str(record.get("stock_code", "")).strip()
+        if stock_code:
+            clustered_record["stock_code"] = stock_code
+        for field in ("unit_value", "unit_name", "unit_system"):
+            if record.get(field) is not None:
+                clustered_record[field] = record[field]
+        clustered_records.append(clustered_record)
+    return clustered_records

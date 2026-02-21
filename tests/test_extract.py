@@ -20,7 +20,13 @@ class _FakeProvider:
 
 def test_extract_returns_contract_shape_and_order() -> None:
     records = [
-        {"description": "white hanging heart holder", "stock_code": "85123A"},
+        {
+            "description": "white hanging heart holder",
+            "stock_code": "85123A",
+            "unit_value": 350.0,
+            "unit_name": "ml",
+            "unit_system": "metric",
+        },
         {"description": "party bunting"},
     ]
     provider = _FakeProvider([[0.1, 0.2], [0.3, 0.4]])
@@ -33,6 +39,9 @@ def test_extract_returns_contract_shape_and_order() -> None:
             "description_norm": "white hanging heart holder",
             "stock_code": "85123A",
             "feature_vector": [0.1, 0.2],
+            "unit_value": 350.0,
+            "unit_name": "ml",
+            "unit_system": "metric",
         },
         {
             "record_id": "record-1",

@@ -256,3 +256,33 @@ def test_different_standard_items_are_separated(left: dict, right: dict) -> None
     result = cluster([left, right])
 
     assert [record["cluster_id"] for record in result] == [0, 1]
+
+
+def test_cluster_preserves_optional_attributes_for_downstream_labeling() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "sparkling water bottle",
+            "feature_vector": [1.0, 0.0],
+            "stock_code": "WATER-500",
+            "unit_value": 500.0,
+            "unit_name": "ml",
+            "unit_system": "metric",
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "sparkling water bottle",
+            "feature_vector": [0.96, 0.04],
+            "stock_code": "WATER-500",
+            "unit_value": 500.0,
+            "unit_name": "ml",
+            "unit_system": "metric",
+        },
+    ]
+
+    result = cluster(records)
+
+    assert result[0]["stock_code"] == "WATER-500"
+    assert result[0]["unit_value"] == 500.0
+    assert result[0]["unit_name"] == "ml"
+    assert result[0]["unit_system"] == "metric"

@@ -30,5 +30,8 @@ def extract(
         }
         if stock_code:
             feature_record["stock_code"] = stock_code
+        for field in ("unit_value", "unit_name", "unit_system"):
+            if record.get(field) is not None:
+                feature_record[field] = record[field]
         features.append(feature_record)
     return features
