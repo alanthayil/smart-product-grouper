@@ -1,5 +1,8 @@
-"""Evaluate clustering and canonical labels; produce report."""
+"""Evaluate clustering outputs and provide clustering-quality metrics."""
 
+from __future__ import annotations
+
+from itertools import combinations
 
 from src.cluster_critic import analyze_cluster
 
@@ -58,6 +61,72 @@ def _suspect_reasons(records: list[dict]) -> list[str]:
         reasons.append("unit_value_mixed")
 
     return reasons
+
+
+def cluster_assignments_from_records(records: list[dict]) -> dict[str, str]:
+    """Build record_id -> cluster_id mapping from clustered records."""
+    assignments: dict[str, str] = {}
+    for record in records:
+        record_id = str(record.get("record_id", "")).strip()
+        if not record_id:
+            continue
+        assignments[record_id] = str(record["cluster_id"])
+    return assignments
+
+
+def pairwise_cluster_metrics(
+    predicted_assignments: dict[str, object],
+    labeled_assignments: dict[str, object],
+) -> dict[str, float]:
+    """Compute pairwise precision/recall/F1 for overlapping labeled records."""
+    common_ids = sorted(
+        set(predicted_assignments.keys()) & set(labeled_assignments.keys())
+    )
+    if len(common_ids) < 2:
+        return {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "tp_pairs": 0.0,
+            "fp_pairs": 0.0,
+            "fn_pairs": 0.0,
+            "num_common_records": float(len(common_ids)),
+        }
+
+    tp_pairs = 0
+    fp_pairs = 0
+    fn_pairs = 0
+    for left_id, right_id in combinations(common_ids, 2):
+        predicted_same = (
+            str(predicted_assignments[left_id]) == str(predicted_assignments[right_id])
+        )
+        labeled_same = (
+            str(labeled_assignments[left_id]) == str(labeled_assignments[right_id])
+        )
+        if predicted_same and labeled_same:
+            tp_pairs += 1
+        elif predicted_same and not labeled_same:
+            fp_pairs += 1
+        elif not predicted_same and labeled_same:
+            fn_pairs += 1
+
+    precision = tp_pairs / (tp_pairs + fp_pairs) if (tp_pairs + fp_pairs) else 0.0
+    recall = tp_pairs / (tp_pairs + fn_pairs) if (tp_pairs + fn_pairs) else 0.0
+    f1 = (
+        (2 * precision * recall / (precision + recall))
+        if (precision + recall)
+        else 0.0
+    )
+
+    return {
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "tp_pairs": float(tp_pairs),
+        "fp_pairs": float(fp_pairs),
+        "fn_pairs": float(fn_pairs),
+        "num_common_records": float(len(common_ids)),
+    }
 
 
 def evaluate(clusters, canonical_labels):

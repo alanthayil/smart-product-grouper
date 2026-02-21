@@ -31,6 +31,23 @@ Or step by step:
 
 All targets use the conda env `datamining` via `conda run`. Or activate `datamining` and run `python run.py data/online_retail_II.xlsx`, `pytest tests/ -v`, `ruff check src/` directly.
 
+## Threshold auto-tuning (CLI)
+
+Use threshold sweep mode to select the best clustering threshold by F1 on a small labeled sample:
+
+```bash
+python run.py data/online_retail_II.xlsx \
+  --auto-tune-thresholds \
+  --labels-path data/labeled_sample.json \
+  --tune-thresholds 0.75,0.8,0.85,0.9,0.95
+```
+
+Supported label JSON formats:
+
+- Direct mapping: `{"record-1": "group-a", "record-2": "group-b"}`
+- Wrapped mapping: `{"labels": {"record-1": "group-a"}}`
+- List of rows: `[{"record_id": "record-1", "true_cluster_id": "group-a"}]`
+
 ## API demo (`POST /cluster`)
 
 1. Install dependencies: `pip install -r requirements.txt`
