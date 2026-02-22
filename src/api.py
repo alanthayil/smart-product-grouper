@@ -115,7 +115,12 @@ async def health_config() -> dict[str, dict[str, bool] | bool]:
     return {"required": required, "ok": all(required.values())}
 
 
-async def _run_pipeline_from_upload(file: UploadFile) -> dict:
+async def _run_pipeline_from_upload(
+    file: UploadFile,
+    *,
+    edge_debug: bool = False,
+    edge_debug_top_k: int = 20,
+) -> dict:
     """Run pipeline for an uploaded workbook and return evaluation payload."""
     filename = (file.filename or "").strip()
     if not filename.lower().endswith(".xlsx"):
@@ -144,12 +149,16 @@ async def _run_pipeline_from_upload(file: UploadFile) -> dict:
             stage = "extract"
             features = extract(normalized)
             stage = "cluster"
+            edge_debug_report: dict[str, object] = {}
             try:
                 clusters = cluster(
                     features,
                     enable_blocking=CLUSTER_ENABLE_BLOCKING,
                     blocking_small_input_cutoff=CLUSTER_BLOCKING_SMALL_INPUT_CUTOFF,
                     rare_token_max_frequency=CLUSTER_BLOCKING_RARE_TOKEN_MAX_FREQUENCY,
+                    edge_debug=edge_debug,
+                    edge_debug_top_k=edge_debug_top_k,
+                    edge_debug_collector=edge_debug_report,
                 )
             except TypeError as exc:
                 if "unexpected keyword argument" not in str(exc):
@@ -160,6 +169,8 @@ async def _run_pipeline_from_upload(file: UploadFile) -> dict:
             labels = canonicalize(clusters)
             stage = "evaluate"
             evaluation = evaluate(clusters, labels)
+            if edge_debug:
+                evaluation["edge_debug"] = edge_debug_report
             evaluation["unmatched_tokens"] = analyze_unmatched_tokens(raw)
             return evaluation
         except ValueError as exc:
@@ -195,15 +206,31 @@ async def _run_pipeline_from_upload(file: UploadFile) -> dict:
 
 
 @app.post("/cluster")
-async def cluster_from_xlsx(file: UploadFile = File(...)) -> dict:
+async def cluster_from_xlsx(
+    file: UploadFile = File(...),
+    edge_debug: bool = False,
+    edge_debug_top_k: int = 20,
+) -> dict:
     """Accept an xlsx upload and return pipeline evaluation JSON."""
-    return await _run_pipeline_from_upload(file)
+    return await _run_pipeline_from_upload(
+        file,
+        edge_debug=edge_debug,
+        edge_debug_top_k=edge_debug_top_k,
+    )
 
 
 @app.post("/cluster/view", response_class=HTMLResponse)
-async def cluster_table_view(file: UploadFile = File(...)) -> str:
+async def cluster_table_view(
+    file: UploadFile = File(...),
+    edge_debug: bool = False,
+    edge_debug_top_k: int = 20,
+) -> str:
     """Accept an xlsx upload and render clustered groups as an HTML table."""
-    evaluation = await _run_pipeline_from_upload(file)
+    evaluation = await _run_pipeline_from_upload(
+        file,
+        edge_debug=edge_debug,
+        edge_debug_top_k=edge_debug_top_k,
+    )
     cluster_sizes = evaluation.get("cluster_sizes", {})
     labels = evaluation.get("labels", {})
     suspect_clusters = evaluation.get("suspect_clusters", [])

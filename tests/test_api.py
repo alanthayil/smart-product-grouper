@@ -122,6 +122,113 @@ def test_cluster_endpoint_accepts_valid_xlsx(monkeypatch) -> None:
     }
 
 
+def test_cluster_endpoint_includes_edge_debug_when_enabled(monkeypatch) -> None:
+    client = TestClient(app)
+
+    def _fake_extract(records: list[dict]) -> list[dict]:
+        return [
+            {
+                "record_id": "r0",
+                "description_norm": "demo item",
+                "feature_vector": [1.0, 0.0],
+            },
+            {
+                "record_id": "r1",
+                "description_norm": "demo item alt",
+                "feature_vector": [0.99, 0.01],
+            },
+        ]
+
+    def _fake_cluster(
+        records: list[dict],
+        *,
+        enable_blocking: bool = True,
+        blocking_small_input_cutoff: int = 300,
+        rare_token_max_frequency: int = 5,
+        edge_debug: bool = False,
+        edge_debug_top_k: int = 20,
+        edge_debug_collector: dict[str, object] | None = None,
+    ) -> list[dict]:
+        if edge_debug and edge_debug_collector is not None:
+            edge_debug_collector["candidate_pairs_evaluated"] = 1
+            edge_debug_collector["top_k"] = edge_debug_top_k
+            edge_debug_collector["top_candidate_pairs"] = [
+                {
+                    "record_id_i": "r0",
+                    "record_id_j": "r1",
+                    "description_i": "demo item",
+                    "description_j": "demo item alt",
+                    "similarity": 0.99,
+                    "stock_code_match": False,
+                    "attrs_i": {
+                        "stock_code": None,
+                        "color": None,
+                        "quantity_total": None,
+                        "unit_name": None,
+                        "unit_system": None,
+                        "unit_value": None,
+                    },
+                    "attrs_j": {
+                        "stock_code": None,
+                        "color": None,
+                        "quantity_total": None,
+                        "unit_name": None,
+                        "unit_system": None,
+                        "unit_value": None,
+                    },
+                    "conflict_reasons": [],
+                    "edge_decision": True,
+                }
+            ]
+        return [
+            {
+                "record_id": "r0",
+                "cluster_id": 0,
+                "description_norm": "demo item",
+                "feature_vector": [1.0, 0.0],
+            },
+            {
+                "record_id": "r1",
+                "cluster_id": 0,
+                "description_norm": "demo item alt",
+                "feature_vector": [0.99, 0.01],
+            },
+        ]
+
+    monkeypatch.setattr("src.api.extract", _fake_extract)
+    monkeypatch.setattr("src.api.cluster", _fake_cluster)
+    monkeypatch.setattr("src.api.canonicalize", lambda clusters: {0: "demo item"})
+    monkeypatch.setattr(
+        "src.api.evaluate",
+        lambda clusters, labels: {
+            "num_records": 2,
+            "num_clusters": 1,
+            "cluster_sizes": {"0": 2},
+            "labels": {"0": "demo item"},
+            "cluster_stats": {"total_clusters": 1, "avg_cluster_size": 2.0, "largest_cluster": 2},
+            "suspect_clusters": [],
+        },
+    )
+
+    response = client.post(
+        "/cluster?edge_debug=true&edge_debug_top_k=7",
+        files={
+            "file": (
+                "demo.xlsx",
+                _build_workbook_bytes(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "edge_debug" in payload
+    assert payload["edge_debug"]["candidate_pairs_evaluated"] == 1
+    assert payload["edge_debug"]["top_k"] == 7
+    assert len(payload["edge_debug"]["top_candidate_pairs"]) == 1
+
+
 def test_cluster_endpoint_rejects_invalid_extension() -> None:
     client = TestClient(app)
     response = client.post(

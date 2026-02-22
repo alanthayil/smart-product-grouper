@@ -63,6 +63,40 @@ def test_render_evaluation_report_shows_empty_state_for_no_suspects() -> None:
 
     assert "## Suspect Clusters" in report
     assert "No suspect clusters detected." in report
+    assert "## Edge Debug Report" not in report
+
+
+def test_render_evaluation_report_includes_edge_debug_section_when_present() -> None:
+    payload = _sample_evaluation()
+    payload["edge_debug"] = {
+        "candidate_pairs_evaluated": 3,
+        "top_k": 2,
+        "top_candidate_pairs": [
+            {
+                "record_id_i": "record-0",
+                "record_id_j": "record-1",
+                "description_i": "alpha item",
+                "description_j": "alpha item red",
+                "similarity": 0.9876,
+                "stock_code_match": False,
+                "attrs_i": {},
+                "attrs_j": {},
+                "conflict_reasons": ["color_conflict"],
+                "edge_decision": False,
+            }
+        ],
+    }
+
+    report = render_evaluation_report(
+        payload,
+        generated_at=datetime(2026, 2, 21, 12, 0, 0, tzinfo=timezone.utc),
+    )
+
+    assert "## Edge Debug Report" in report
+    assert "- Candidate pairs evaluated: 3" in report
+    assert "- Top pairs requested: 2" in report
+    assert "| record_i | record_j | similarity | stock_match | conflicts | edge_decision |" in report
+    assert "| record-0 | record-1 | 0.9876 | False | color_conflict | False |" in report
 
 
 def test_generate_report_cli_writes_default_output(monkeypatch) -> None:

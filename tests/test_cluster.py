@@ -665,3 +665,59 @@ def test_sample_workbook_expected_clustering(tmp_path: Path) -> None:
     assert cluster_by_record_id["two-a"] == cluster_by_record_id["two-b"]
     assert cluster_by_record_id["dup-a"] == cluster_by_record_id["dup-b"]
     assert cluster_by_record_id["red-a"] != cluster_by_record_id["pink-a"]
+
+
+def test_cluster_edge_debug_report_includes_required_fields() -> None:
+    records = [
+        {
+            "record_id": "red",
+            "description_norm": "ceramic mug red",
+            "feature_vector": [1.0, 0.0],
+            "color": "red",
+        },
+        {
+            "record_id": "pink",
+            "description_norm": "ceramic mug pink",
+            "feature_vector": [0.99, 0.01],
+            "color": "pink",
+        },
+        {
+            "record_id": "neutral",
+            "description_norm": "ceramic mug neutral",
+            "feature_vector": [0.2, 0.98],
+        },
+    ]
+    edge_debug: dict[str, object] = {}
+
+    cluster(
+        records,
+        edge_debug=True,
+        edge_debug_top_k=2,
+        edge_debug_collector=edge_debug,
+        blocking_small_input_cutoff=1000,
+    )
+
+    assert edge_debug["candidate_pairs_evaluated"] == 3
+    assert edge_debug["top_k"] == 2
+    top_pairs = edge_debug["top_candidate_pairs"]
+    assert isinstance(top_pairs, list)
+    assert len(top_pairs) == 2
+
+    first = top_pairs[0]
+    assert set(first.keys()) == {
+        "record_id_i",
+        "record_id_j",
+        "description_i",
+        "description_j",
+        "similarity",
+        "stock_code_match",
+        "attrs_i",
+        "attrs_j",
+        "conflict_reasons",
+        "edge_decision",
+    }
+    assert first["description_i"] == "ceramic mug red"
+    assert first["description_j"] == "ceramic mug pink"
+    assert first["stock_code_match"] is False
+    assert first["conflict_reasons"] == ["color_conflict"]
+    assert first["edge_decision"] is False

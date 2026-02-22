@@ -103,6 +103,17 @@ def main(argv: list[str] | None = None) -> None:
         default=5,
         help="Token frequency threshold used for rare-token blocking keys (default: 5).",
     )
+    parser.add_argument(
+        "--edge-debug",
+        action="store_true",
+        help="Include edge-decision debug report for top candidate pairs.",
+    )
+    parser.add_argument(
+        "--edge-debug-top-k",
+        type=int,
+        default=20,
+        help="Maximum number of top candidate pairs to include in edge debug report.",
+    )
     args = parser.parse_args(argv)
 
     input_path = args.input_path
@@ -125,6 +136,7 @@ def main(argv: list[str] | None = None) -> None:
         )
         selected_threshold = float(tuning_summary["best_threshold"])
 
+    edge_debug_report: dict[str, object] = {}
     try:
         clusters = cluster(
             features,
@@ -132,6 +144,9 @@ def main(argv: list[str] | None = None) -> None:
             enable_blocking=not args.disable_blocking,
             blocking_small_input_cutoff=args.blocking_small_input_cutoff,
             rare_token_max_frequency=args.blocking_rare_token_max_frequency,
+            edge_debug=args.edge_debug,
+            edge_debug_top_k=args.edge_debug_top_k,
+            edge_debug_collector=edge_debug_report,
         )
     except TypeError as exc:
         if "unexpected keyword argument" not in str(exc):
@@ -142,6 +157,8 @@ def main(argv: list[str] | None = None) -> None:
     report = evaluate(clusters, labels)
     if tuning_summary is not None:
         report["tuning"] = tuning_summary
+    if args.edge_debug:
+        report["edge_debug"] = edge_debug_report
     report["similarity_threshold"] = selected_threshold
     print("Report:", report)
 
