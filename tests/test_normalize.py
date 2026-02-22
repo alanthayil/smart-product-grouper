@@ -10,6 +10,7 @@ from src.normalize import (
     _extract_color,
     _extract_quantity_total,
     _extract_unit_info,
+    _normalize_for_embedding,
     normalize,
 )
 
@@ -290,3 +291,54 @@ def test_normalize_preserves_stock_code_and_emits_deterministic_ids() -> None:
     assert normalized[1]["stock_code"] == "xyz-9"
     assert normalized[1]["row_index"] == 1
     assert normalized[1]["record_id"] == "record-1"
+
+
+@pytest.mark.parametrize(
+    ("raw_text", "expected"),
+    [
+        ("two seven eleven", "2 7 11"),
+        ("ZERO one Twenty", "0 1 20"),
+    ],
+)
+def test_normalize_for_embedding_converts_number_words_to_digits(
+    raw_text: str, expected: str
+) -> None:
+    assert _normalize_for_embedding(_clean_text(raw_text)) == expected
+
+
+@pytest.mark.parametrize(
+    ("raw_text", "expected"),
+    [
+        ("spaceboy birdcage", "space boy bird cage"),
+        ("space boy bird cage", "space boy bird cage"),
+    ],
+)
+def test_normalize_for_embedding_canonicalizes_common_token_splits(
+    raw_text: str, expected: str
+) -> None:
+    assert _normalize_for_embedding(_clean_text(raw_text)) == expected
+
+
+def test_normalize_for_embedding_drops_moderate_noise_tokens() -> None:
+    cleaned = _clean_text("the mug of the set with lid and handle")
+    assert _normalize_for_embedding(cleaned) == "mug set lid handle"
+
+
+def test_normalize_removes_noise_tokens_but_preserves_pack_quantity_extraction() -> None:
+    records = [{"Description": "Spaceboy mug pack of 72"}]
+
+    normalized = normalize(records)
+
+    assert normalized == [
+        {
+            "record_id": "record-0",
+            "row_index": 0,
+            "stock_code": "",
+            "description": "space boy mug pack 72",
+            "color": None,
+            "quantity_total": 72,
+            "unit_value": None,
+            "unit_name": None,
+            "unit_system": None,
+        }
+    ]
