@@ -104,10 +104,15 @@ def _extract_unit_info(description: str) -> UnitInfo | None:
 def normalize(records: list[dict]) -> list[dict]:
     """Normalize a list of raw records."""
     normalized: list[dict] = []
-    for record in records:
+    for row_index, record in enumerate(records):
         description = _apply_synonyms(_clean_text(record.get("Description", "")))
         unit_info = _extract_unit_info(description)
+        stock_code = str(record.get("StockCode", record.get("stock_code", ""))).strip()
+        record_id = str(record.get("record_id", "")).strip() or f"record-{row_index}"
         normalized_record = {
+            "record_id": record_id,
+            "row_index": row_index,
+            "stock_code": stock_code,
             "description": description,
             "unit_value": None,
             "unit_name": None,

@@ -34,6 +34,9 @@ def test_normalize_cleans_description_only() -> None:
 
     assert normalized == [
         {
+            "record_id": "record-0",
+            "row_index": 0,
+            "stock_code": "SKU_123",
             "description": "white hanging heart",
             "unit_value": None,
             "unit_name": None,
@@ -86,6 +89,9 @@ def test_normalize_formats_units_and_extracts_structured_fields() -> None:
 
     assert normalized == [
         {
+            "record_id": "record-0",
+            "row_index": 0,
+            "stock_code": "",
             "description": "premium olive oil 1 l bottle",
             "unit_value": 1000.0,
             "unit_name": "ml",
@@ -117,6 +123,9 @@ def test_normalize_applies_synonyms_and_preserves_unit_extraction() -> None:
 
     assert normalized == [
         {
+            "record_id": "record-0",
+            "row_index": 0,
+            "stock_code": "",
             "description": "hexagon bolt 2 oz pack",
             "unit_value": 56.699,
             "unit_name": "g",
@@ -154,6 +163,9 @@ def test_normalize_handles_mixed_casing_end_to_end() -> None:
 
     assert normalized == [
         {
+            "record_id": "record-0",
+            "row_index": 0,
+            "stock_code": "",
             "description": "hexagon bolt 2 oz",
             "unit_value": 56.699,
             "unit_name": "g",
@@ -203,9 +215,29 @@ def test_normalize_handles_weird_formatting_and_stays_deterministic() -> None:
 
     assert normalized == [
         {
+            "record_id": "record-0",
+            "row_index": 0,
+            "stock_code": "",
             "description": "hexagon bolt 2 oz pack",
             "unit_value": 56.699,
             "unit_name": "g",
             "unit_system": "metric",
         }
     ]
+
+
+def test_normalize_preserves_stock_code_and_emits_deterministic_ids() -> None:
+    records = [
+        {"StockCode": "ABC123", "Description": "Sparkling water 500ml"},
+        {"stock_code": "xyz-9", "Description": "Sparkling water 500 ml"},
+    ]
+
+    normalized = normalize(records)
+
+    assert normalized[0]["stock_code"] == "ABC123"
+    assert normalized[0]["row_index"] == 0
+    assert normalized[0]["record_id"] == "record-0"
+
+    assert normalized[1]["stock_code"] == "xyz-9"
+    assert normalized[1]["row_index"] == 1
+    assert normalized[1]["record_id"] == "record-1"
