@@ -267,7 +267,7 @@ Contributions are welcome. Please open an issue to discuss major changes before 
 
 ## License
 
-Add a LICENSE file (e.g., MIT, Apache 2.0) and reference it here to clarify usage and distribution rights.
+This project is licensed under the MIT License. See `LICENSE` for details.
 
 ---
 
