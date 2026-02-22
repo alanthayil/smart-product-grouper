@@ -2,6 +2,8 @@
 
 Deterministic, explainable, constraint-aware clustering for noisy retail product catalogs.
 
+![Demo](docs/demo.gif)
+
 ---
 
 ## Overview
