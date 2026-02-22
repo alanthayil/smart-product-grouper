@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from html import escape
 import os
 from tempfile import NamedTemporaryFile
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import HTMLResponse
 try:
@@ -21,11 +23,40 @@ from src.ingest import ingest
 from src.normalize import normalize
 from src.synonym_suggestions import analyze_unmatched_tokens
 
-app = FastAPI(title="Smart Product Grouper API", version="0.1.0")
 INVALID_XLSX_DETAIL = (
     "Invalid xlsx file upload. Please provide a valid .xlsx workbook "
     "with required sheets/columns."
 )
+REQUIRED_ENV_VARS = ("OPENAI_API_KEY",)
+
+
+def _required_config_status() -> dict[str, bool]:
+    """Return required runtime config presence without exposing values."""
+    return {name: bool(os.getenv(name)) for name in REQUIRED_ENV_VARS}
+
+
+def _ensure_required_config() -> None:
+    """Fail fast when required runtime configuration is missing."""
+    required = _required_config_status()
+    missing = [name for name, present in required.items() if not present]
+    if missing:
+        missing_vars = ", ".join(missing)
+        raise RuntimeError(
+            f"Missing required configuration: {missing_vars}. "
+            "Set OPENAI_API_KEY in a project .env file (OPENAI_API_KEY=...) "
+            "or export it in your environment before starting the server."
+        )
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Load .env values and validate required local config."""
+    load_dotenv(override=False)
+    _ensure_required_config()
+    yield
+
+
+app = FastAPI(title="Smart Product Grouper API", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -46,6 +77,13 @@ async def upload_form() -> str:
   </body>
 </html>
 """
+
+
+@app.get("/health/config")
+async def health_config() -> dict[str, dict[str, bool] | bool]:
+    """Return non-sensitive required config readiness."""
+    required = _required_config_status()
+    return {"required": required, "ok": all(required.values())}
 
 
 async def _run_pipeline_from_upload(file: UploadFile) -> dict:

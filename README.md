@@ -62,9 +62,14 @@ Supported label JSON formats:
 ## API demo (`POST /cluster`)
 
 1. Install dependencies: `pip install -r requirements.txt`
-2. Start server: `python serve.py`
-3. Browser upload flow: open `http://127.0.0.1:8000/`, choose an `.xlsx` file, and submit to view a cluster table.
-4. Programmatic JSON API remains at `POST /cluster` (for curl/clients):
+2. Create local env file at project root:
+   - `.env` with `OPENAI_API_KEY=your_key_here`
+3. Dev checklist before server start:
+   - `python -c "import os; print(bool(os.getenv('OPENAI_API_KEY')))"` should print `True`
+4. Start server: `python serve.py`
+5. Browser upload flow: open `http://127.0.0.1:8000/`, choose an `.xlsx` file, and submit to view a cluster table.
+6. Optional config health check: `GET http://127.0.0.1:8000/health/config` (reports config presence only; no secret values).
+7. Programmatic JSON API remains at `POST /cluster` (for curl/clients):
 
 ```bash
 curl -X POST "http://127.0.0.1:8000/cluster" \

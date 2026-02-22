@@ -5,6 +5,7 @@ from __future__ import annotations
 from io import BytesIO
 
 import pandas as pd
+import pytest
 from fastapi.testclient import TestClient
 
 from src.api import app
@@ -14,6 +15,30 @@ INVALID_XLSX_DETAIL = (
     "Invalid xlsx file upload. Please provide a valid .xlsx workbook "
     "with required sheets/columns."
 )
+
+
+@pytest.fixture(autouse=True)
+def _set_openai_api_key(monkeypatch) -> None:
+    """Default tests to a valid API key so app startup preflight passes."""
+    monkeypatch.setenv("OPENAI_API_KEY", "test-api-key")
+
+
+def test_startup_preflight_fails_when_openai_key_missing(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setattr("src.api.load_dotenv", lambda *args, **kwargs: None)
+
+    with pytest.raises(RuntimeError, match="Missing required configuration: OPENAI_API_KEY"):
+        with TestClient(app):
+            pass
+
+
+def test_health_config_reports_required_config_present() -> None:
+    client = TestClient(app)
+    response = client.get("/health/config")
+
+    assert response.status_code == 200
+    assert response.json() == {"required": {"OPENAI_API_KEY": True}, "ok": True}
+    assert "test-api-key" not in response.text
 
 
 def test_upload_form_route_renders_minimal_html() -> None:
