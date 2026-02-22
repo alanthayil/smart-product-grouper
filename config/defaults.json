@@ -1,0 +1,16 @@
+{
+  "cluster": {
+    "similarity_threshold": 0.85,
+    "conflicts": {
+      "enforce_color": true,
+      "enforce_quantity": true
+    }
+  },
+  "normalize": {
+    "number_words": true,
+    "token_splits": true,
+    "noise_tokens": true,
+    "extract_color": true,
+    "extract_quantity": true
+  }
+}

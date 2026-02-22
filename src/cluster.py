@@ -192,6 +192,8 @@ def cluster(
     records_or_features: list[dict],
     *,
     similarity_threshold: float = 0.85,
+    enforce_color_conflict: bool = True,
+    enforce_quantity_conflict: bool = True,
     enable_blocking: bool = True,
     blocking_small_input_cutoff: int = _DEFAULT_BLOCKING_SMALL_INPUT_CUTOFF,
     rare_token_max_frequency: int = _DEFAULT_RARE_TOKEN_MAX_FREQUENCY,
@@ -233,7 +235,18 @@ def cluster(
         )
         stock_match = _stock_code_match(source_record, target_record)
         conflict_reasons = _conflict_reasons(source_record, target_record)
-        compatible = not conflict_reasons
+        enforced_conflict_reasons = conflict_reasons
+        if not enforce_color_conflict:
+            enforced_conflict_reasons = [
+                reason for reason in enforced_conflict_reasons if reason != "color_conflict"
+            ]
+        if not enforce_quantity_conflict:
+            enforced_conflict_reasons = [
+                reason
+                for reason in enforced_conflict_reasons
+                if reason != "quantity_total_conflict"
+            ]
+        compatible = not enforced_conflict_reasons
         edge_decision = stock_match or (similarity >= similarity_threshold and compatible)
         if collect_edge_debug:
             edge_debug_rows.append(
@@ -264,7 +277,7 @@ def cluster(
                         "unit_system": target_record.get("unit_system"),
                         "unit_value": target_record.get("unit_value"),
                     },
-                    "conflict_reasons": conflict_reasons,
+                    "conflict_reasons": enforced_conflict_reasons,
                     "edge_decision": bool(edge_decision),
                 }
             )

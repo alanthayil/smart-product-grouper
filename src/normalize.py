@@ -182,11 +182,21 @@ def _remove_embedding_noise_tokens(text: str) -> str:
     return " ".join(filtered_tokens)
 
 
-def _normalize_for_embedding(text: str) -> str:
+def _normalize_for_embedding(
+    text: str,
+    *,
+    canonicalize_number_words: bool = True,
+    canonicalize_token_splits: bool = True,
+    remove_noise_tokens: bool = True,
+) -> str:
     """Apply deterministic normalization to maximize embedding recall."""
-    normalized_text = _canonicalize_number_words(text)
-    normalized_text = _canonicalize_common_token_splits(normalized_text)
-    normalized_text = _remove_embedding_noise_tokens(normalized_text)
+    normalized_text = text
+    if canonicalize_number_words:
+        normalized_text = _canonicalize_number_words(normalized_text)
+    if canonicalize_token_splits:
+        normalized_text = _canonicalize_common_token_splits(normalized_text)
+    if remove_noise_tokens:
+        normalized_text = _remove_embedding_noise_tokens(normalized_text)
     normalized_text = _WHITESPACE_RUNS.sub(" ", normalized_text)
     return normalized_text.strip()
 
@@ -239,12 +249,25 @@ def _extract_quantity_total(description: str) -> int | None:
     return None
 
 
-def normalize(records: list[dict]) -> list[dict]:
+def normalize(
+    records: list[dict],
+    *,
+    canonicalize_number_words: bool = True,
+    canonicalize_token_splits: bool = True,
+    remove_noise_tokens: bool = True,
+    extract_color: bool = True,
+    extract_quantity: bool = True,
+) -> list[dict]:
     """Normalize a list of raw records."""
     normalized: list[dict] = []
     for row_index, record in enumerate(records):
         base_description = _apply_synonyms(_clean_text(record.get("Description", "")))
-        description = _normalize_for_embedding(base_description)
+        description = _normalize_for_embedding(
+            base_description,
+            canonicalize_number_words=canonicalize_number_words,
+            canonicalize_token_splits=canonicalize_token_splits,
+            remove_noise_tokens=remove_noise_tokens,
+        )
         unit_info = _extract_unit_info(base_description)
         stock_code = str(record.get("StockCode", record.get("stock_code", ""))).strip()
         record_id = str(record.get("record_id", "")).strip() or f"record-{row_index}"
@@ -259,12 +282,14 @@ def normalize(records: list[dict]) -> list[dict]:
             "unit_name": None,
             "unit_system": None,
         }
-        color = _extract_color(base_description)
-        if color:
-            normalized_record["color"] = color
-        quantity_total = _extract_quantity_total(base_description)
-        if quantity_total is not None:
-            normalized_record["quantity_total"] = quantity_total
+        if extract_color:
+            color = _extract_color(base_description)
+            if color:
+                normalized_record["color"] = color
+        if extract_quantity:
+            quantity_total = _extract_quantity_total(base_description)
+            if quantity_total is not None:
+                normalized_record["quantity_total"] = quantity_total
         if unit_info:
             normalized_record.update(unit_info)
         normalized.append(normalized_record)

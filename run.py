@@ -7,6 +7,7 @@ import argparse
 import json
 
 from src.auto_tune import tune_similarity_threshold
+from src.config import load_runtime_config
 from src.ingest import ingest
 from src.normalize import normalize
 from src.extract import extract
@@ -68,8 +69,11 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--similarity-threshold",
         type=float,
-        default=0.85,
-        help="Similarity threshold used when auto-tuning is disabled (default: 0.85).",
+        default=None,
+        help=(
+            "Similarity threshold used when auto-tuning is disabled "
+            "(defaults to config value)."
+        ),
     )
     parser.add_argument(
         "--auto-tune-thresholds",
@@ -115,13 +119,27 @@ def main(argv: list[str] | None = None) -> None:
         help="Maximum number of top candidate pairs to include in edge debug report.",
     )
     args = parser.parse_args(argv)
+    runtime_config = load_runtime_config()
+    cluster_config = runtime_config["cluster"]
+    normalize_config = runtime_config["normalize"]
 
     input_path = args.input_path
     raw = ingest(input_path)
-    normalized = normalize(raw)
+    normalized = normalize(
+        raw,
+        canonicalize_number_words=normalize_config["number_words"],
+        canonicalize_token_splits=normalize_config["token_splits"],
+        remove_noise_tokens=normalize_config["noise_tokens"],
+        extract_color=normalize_config["extract_color"],
+        extract_quantity=normalize_config["extract_quantity"],
+    )
     features = extract(normalized)
 
-    selected_threshold = float(args.similarity_threshold)
+    selected_threshold = (
+        float(args.similarity_threshold)
+        if args.similarity_threshold is not None
+        else float(cluster_config["similarity_threshold"])
+    )
     tuning_summary: dict[str, object] | None = None
 
     if args.auto_tune_thresholds:
@@ -141,6 +159,8 @@ def main(argv: list[str] | None = None) -> None:
         clusters = cluster(
             features,
             similarity_threshold=selected_threshold,
+            enforce_color_conflict=cluster_config["conflicts"]["enforce_color"],
+            enforce_quantity_conflict=cluster_config["conflicts"]["enforce_quantity"],
             enable_blocking=not args.disable_blocking,
             blocking_small_input_cutoff=args.blocking_small_input_cutoff,
             rare_token_max_frequency=args.blocking_rare_token_max_frequency,

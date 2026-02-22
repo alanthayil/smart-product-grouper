@@ -342,3 +342,43 @@ def test_normalize_removes_noise_tokens_but_preserves_pack_quantity_extraction()
             "unit_system": None,
         }
     ]
+
+
+def test_normalize_toggle_disables_number_word_canonicalization() -> None:
+    records = [{"Description": "Party candle two pack"}]
+
+    normalized = normalize(records, canonicalize_number_words=False)
+
+    assert normalized[0]["description"] == "party candle two pack"
+
+
+def test_normalize_toggle_disables_token_split_canonicalization() -> None:
+    records = [{"Description": "Spaceboy Birdcage"}]
+
+    normalized = normalize(records, canonicalize_token_splits=False)
+
+    assert normalized[0]["description"] == "spaceboy birdcage"
+
+
+def test_normalize_toggle_disables_noise_token_removal() -> None:
+    records = [{"Description": "the mug of the set"}]
+
+    normalized = normalize(records, remove_noise_tokens=False)
+
+    assert normalized[0]["description"] == "the mug of the set"
+
+
+def test_normalize_toggle_disables_color_extraction() -> None:
+    records = [{"Description": "Blue ceramic mug"}]
+
+    normalized = normalize(records, extract_color=False)
+
+    assert normalized[0]["color"] is None
+
+
+def test_normalize_toggle_disables_quantity_extraction() -> None:
+    records = [{"Description": "Spaceboy mug pack of 72"}]
+
+    normalized = normalize(records, extract_quantity=False)
+
+    assert normalized[0]["quantity_total"] is None

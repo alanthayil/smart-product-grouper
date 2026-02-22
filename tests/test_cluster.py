@@ -272,6 +272,48 @@ def test_cluster_similarity_path_blocks_explicit_quantity_conflict() -> None:
     assert [record["cluster_id"] for record in result] == [0, 1]
 
 
+def test_cluster_allows_color_conflict_when_color_toggle_disabled() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "ceramic mug red",
+            "feature_vector": [1.0, 0.0],
+            "color": "red",
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "ceramic mug blue",
+            "feature_vector": [0.95, 0.05],
+            "color": "blue",
+        },
+    ]
+
+    result = cluster(records, enforce_color_conflict=False)
+
+    assert [record["cluster_id"] for record in result] == [0, 0]
+
+
+def test_cluster_allows_quantity_conflict_when_quantity_toggle_disabled() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "detergent pack 60",
+            "feature_vector": [1.0, 0.0],
+            "quantity_total": 60,
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "detergent pack 72",
+            "feature_vector": [0.95, 0.05],
+            "quantity_total": 72,
+        },
+    ]
+
+    result = cluster(records, enforce_quantity_conflict=False)
+
+    assert [record["cluster_id"] for record in result] == [0, 0]
+
+
 def test_cluster_similarity_path_allows_missing_quantity_signal() -> None:
     records = [
         {

@@ -23,6 +23,26 @@ def _set_openai_api_key(monkeypatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "test-api-key")
 
 
+@pytest.fixture(autouse=True)
+def _set_runtime_config_defaults(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "src.api.load_runtime_config",
+        lambda: {
+            "cluster": {
+                "similarity_threshold": 0.85,
+                "conflicts": {"enforce_color": True, "enforce_quantity": True},
+            },
+            "normalize": {
+                "number_words": True,
+                "token_splits": True,
+                "noise_tokens": True,
+                "extract_color": True,
+                "extract_quantity": True,
+            },
+        },
+    )
+
+
 def test_startup_preflight_fails_when_openai_key_missing(monkeypatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.setattr("src.api.load_dotenv", lambda *args, **kwargs: None)
@@ -142,6 +162,9 @@ def test_cluster_endpoint_includes_edge_debug_when_enabled(monkeypatch) -> None:
     def _fake_cluster(
         records: list[dict],
         *,
+        similarity_threshold: float = 0.85,
+        enforce_color_conflict: bool = True,
+        enforce_quantity_conflict: bool = True,
         enable_blocking: bool = True,
         blocking_small_input_cutoff: int = 300,
         rare_token_max_frequency: int = 5,
@@ -320,7 +343,7 @@ def test_cluster_endpoint_returns_risk_and_explanation_in_suspects(monkeypatch) 
     client = TestClient(app)
 
     monkeypatch.setattr("src.api.extract", lambda records: records)
-    monkeypatch.setattr("src.api.cluster", lambda records: records)
+    monkeypatch.setattr("src.api.cluster", lambda records, **kwargs: records)
     monkeypatch.setattr("src.api.canonicalize", lambda clusters: {0: "item"})
     monkeypatch.setattr(
         "src.api.evaluate",
@@ -375,7 +398,7 @@ def test_cluster_endpoint_includes_ranked_unmatched_tokens(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         "src.api.normalize",
-        lambda raw_records: [
+        lambda raw_records, **kwargs: [
             {
                 "description": str(row.get("Description", "")).lower(),
                 "unit_value": None,
@@ -386,7 +409,7 @@ def test_cluster_endpoint_includes_ranked_unmatched_tokens(monkeypatch) -> None:
         ],
     )
     monkeypatch.setattr("src.api.extract", lambda records: records)
-    monkeypatch.setattr("src.api.cluster", lambda records: records)
+    monkeypatch.setattr("src.api.cluster", lambda records, **kwargs: records)
     monkeypatch.setattr("src.api.canonicalize", lambda clusters: {0: "item"})
     monkeypatch.setattr(
         "src.api.evaluate",
@@ -422,3 +445,75 @@ def test_cluster_endpoint_includes_ranked_unmatched_tokens(monkeypatch) -> None:
         {"token": "clamp", "count": 1},
         {"token": "pro", "count": 1},
     ]
+
+
+def test_cluster_endpoint_uses_shared_config_for_normalize_and_cluster(monkeypatch) -> None:
+    client = TestClient(app)
+    observed: dict[str, object] = {}
+    monkeypatch.setattr(
+        "src.api.load_runtime_config",
+        lambda: {
+            "cluster": {
+                "similarity_threshold": 0.91,
+                "conflicts": {"enforce_color": False, "enforce_quantity": False},
+            },
+            "normalize": {
+                "number_words": False,
+                "token_splits": False,
+                "noise_tokens": False,
+                "extract_color": False,
+                "extract_quantity": False,
+            },
+        },
+    )
+    def _fake_normalize(raw: list[dict], **kwargs) -> list[dict]:
+        observed["normalize_kwargs"] = kwargs
+        return [{"description": "item"}]
+
+    monkeypatch.setattr("src.api.normalize", _fake_normalize)
+    monkeypatch.setattr(
+        "src.api.extract",
+        lambda records: [{"record_id": "r0", "description_norm": "item", "feature_vector": [1.0]}],
+    )
+
+    def _fake_cluster(records: list[dict], **kwargs) -> list[dict]:
+        observed["cluster_kwargs"] = kwargs
+        return [{"record_id": "r0", "cluster_id": 0, "description_norm": "item", "feature_vector": [1.0]}]
+
+    monkeypatch.setattr("src.api.cluster", _fake_cluster)
+    monkeypatch.setattr("src.api.canonicalize", lambda clusters: {0: "item"})
+    monkeypatch.setattr(
+        "src.api.evaluate",
+        lambda clusters, labels: {
+            "num_records": 1,
+            "num_clusters": 1,
+            "cluster_sizes": {"0": 1},
+            "labels": {"0": "item"},
+            "cluster_stats": {"total_clusters": 1, "avg_cluster_size": 1.0, "largest_cluster": 1},
+            "suspect_clusters": [],
+        },
+    )
+
+    response = client.post(
+        "/cluster",
+        files={
+            "file": (
+                "demo.xlsx",
+                _build_workbook_bytes(),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    assert observed["normalize_kwargs"] == {
+        "canonicalize_number_words": False,
+        "canonicalize_token_splits": False,
+        "remove_noise_tokens": False,
+        "extract_color": False,
+        "extract_quantity": False,
+    }
+    cluster_kwargs = observed["cluster_kwargs"]
+    assert cluster_kwargs["similarity_threshold"] == 0.91
+    assert cluster_kwargs["enforce_color_conflict"] is False
+    assert cluster_kwargs["enforce_quantity_conflict"] is False

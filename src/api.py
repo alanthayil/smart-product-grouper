@@ -17,6 +17,7 @@ except ImportError:  # pragma: no cover - defensive when optional dependency mis
 
 from src.canonicalize import canonicalize
 from src.cluster import cluster
+from src.config import load_runtime_config
 from src.evaluate import evaluate
 from src.extract import extract
 from src.ingest import ingest
@@ -122,6 +123,9 @@ async def _run_pipeline_from_upload(
     edge_debug_top_k: int = 20,
 ) -> dict:
     """Run pipeline for an uploaded workbook and return evaluation payload."""
+    runtime_config = load_runtime_config()
+    cluster_config = runtime_config["cluster"]
+    normalize_config = runtime_config["normalize"]
     filename = (file.filename or "").strip()
     if not filename.lower().endswith(".xlsx"):
         raise HTTPException(status_code=400, detail="Expected a .xlsx file upload.")
@@ -145,7 +149,14 @@ async def _run_pipeline_from_upload(
 
         try:
             stage = "normalize"
-            normalized = normalize(raw)
+            normalized = normalize(
+                raw,
+                canonicalize_number_words=normalize_config["number_words"],
+                canonicalize_token_splits=normalize_config["token_splits"],
+                remove_noise_tokens=normalize_config["noise_tokens"],
+                extract_color=normalize_config["extract_color"],
+                extract_quantity=normalize_config["extract_quantity"],
+            )
             stage = "extract"
             features = extract(normalized)
             stage = "cluster"
@@ -153,6 +164,9 @@ async def _run_pipeline_from_upload(
             try:
                 clusters = cluster(
                     features,
+                    similarity_threshold=float(cluster_config["similarity_threshold"]),
+                    enforce_color_conflict=cluster_config["conflicts"]["enforce_color"],
+                    enforce_quantity_conflict=cluster_config["conflicts"]["enforce_quantity"],
                     enable_blocking=CLUSTER_ENABLE_BLOCKING,
                     blocking_small_input_cutoff=CLUSTER_BLOCKING_SMALL_INPUT_CUTOFF,
                     rare_token_max_frequency=CLUSTER_BLOCKING_RARE_TOKEN_MAX_FREQUENCY,
