@@ -1,132 +1,152 @@
 # Smart Product Grouper
 
-**Phase 1 — Foundation (vertical slice):** Excel → Clusters → Canonical Labels → Report.
+Deterministic, explainable, constraint-aware clustering for noisy retail product catalogs.
 
-Product data is ingested from Excel (.xlsx), normalized, clustered, assigned canonical labels, and summarized in a report.
+## 1) Headline
 
-## Before/After examples (including messy raw text)
+`smart-product-grouper` is an end-to-end clustering system that combines semantic embeddings with deterministic merge constraints, so outputs are both scalable and auditable.
 
-| Before (raw descriptions) | After (canonical label) |
-|---|---|
-| `WHITE HANGING HEART T-LIGHT HOLDER` | `white hanging heart t light holder` |
-| `white   hanging heart   tlight holder!!!` | `white hanging heart t light holder` |
-| `JUMBO BAG RED RETROSPOT` | `jumbo bag red retrospot` |
-| `JUMBO--BAG red retro spot` | `jumbo bag red retrospot` |
-| `Sparkling Water Lemon 500ml` | `sparkling water lemon 500 ml 500 ml` |
-| `SPARKLING WATER  LEMON   0.5 L` | `sparkling water lemon 500 ml 500 ml` |
+## 2) Industrial Problem Framing
 
-## Input data
+Embedding-only clustering handles wording variation but fails in production catalogs where semantically similar strings can represent different SKUs, sizes, units, or variants. Real data adds punctuation noise, token splits, inconsistent units, and sparse metadata. Without explicit constraints, high-similarity pairs create bad merges that look plausible but break downstream analytics.
 
-- **File:** `data/online_retail_II.xlsx` — place this file in `data/` for the default run.
-- **Sheets:** `Year 2009-2010`, `Year 2010-2011` (both are read and combined).
-- **Columns:** Invoice, StockCode, Description, Quantity, InvoiceDate, Price, Customer ID, Country.
+This system treats clustering as a constrained decision process:
 
-## Setup
+- Normalize and canonicalize textual inputs before embedding.
+- Extract structured attributes (`color`, `quantity_total`, normalized units) as compatibility signals.
+- Use cosine similarity for semantic affinity, then enforce conflict checks before edge creation.
+- Build clusters through deterministic connected components with stable ordering.
 
-**One command for new clones:** `make setup` — creates the conda env `datamining` (if missing) and installs dependencies.
+Semantic similarity is important, but never the only decision rule.
 
-Or step by step:
-1. `conda create -n datamining python=3 -y` (if not already created)
-2. `conda activate datamining`
-3. `make install` or `pip install -r requirements.txt`
+## 3) System Overview
 
-## Make commands
+- Ingests `.xlsx` workbooks from required retail sheets and validates required columns before downstream processing.
+- Applies deterministic cleanup: text normalization, synonym canonicalization, number-word conversion, token-split canonicalization, and optional noise-token removal.
+- Converts units to canonical metric form (`kg/lb/oz -> g`, `l -> ml`) and extracts `color` plus `quantity_total`.
+- Generates embeddings from normalized descriptions using OpenAI `text-embedding-3-small`.
+- Builds candidate pairs via stock-code, prefix, and rare-token blocking for larger inputs; uses all-pairs for small inputs.
+- Forms edges by cosine threshold plus compatibility checks across stock code, unit fields, color, and quantity (with toggles).
+- Generates canonical labels and evaluates clusters into statistics, suspect diagnostics, and optional edge-level debug output.
 
-| Command | Purpose |
-|---------|---------|
-| `make setup` | Create conda env + install deps (run once per clone) |
-| `make run` | Run pipeline on default xlsx (`data/online_retail_II.xlsx`). Override: `make run INPUT=path/to/file.xlsx` |
-| `make test` | Run tests (`pytest tests/ -v`) |
-| `make demo` | Run pipeline on `data/online_retail_II.xlsx` |
-| `make lint` | Lint `src/` with ruff |
+## 4) What Makes This Different
 
-All targets use the conda env `datamining` via `conda run`. Or activate `datamining` and run `python run.py data/online_retail_II.xlsx`, `pytest tests/ -v`, `ruff check src/` directly.
+### Versus pure embedding clustering
 
-## Threshold auto-tuning (CLI)
+Pure embedding methods over-merge operationally incompatible products. This implementation blocks merges when attribute conflicts are detected, including:
 
-Use threshold sweep mode to select the best clustering threshold by F1 on a small labeled sample:
+- `stock_code_conflict`
+- `unit_name_conflict`
+- `unit_system_conflict`
+- `unit_value_conflict`
+- `color_conflict` (toggleable)
+- `quantity_total_conflict` (toggleable)
 
-```bash
-python run.py data/online_retail_II.xlsx \
-  --auto-tune-thresholds \
-  --labels-path data/labeled_sample.json \
-  --tune-thresholds 0.75,0.8,0.85,0.9,0.95
-```
+### Versus simple fuzzy matching
 
-Supported label JSON formats:
+Fuzzy matching is brittle on domain vocabulary and weak on semantic similarity. Here, normalization and synonym canonicalization clean the text surface, embeddings recover semantic proximity, and guardrails control precision.
 
-- Direct mapping: `{"record-1": "group-a", "record-2": "group-b"}`
-- Wrapped mapping: `{"labels": {"record-1": "group-a"}}`
-- List of rows: `[{"record_id": "record-1", "true_cluster_id": "group-a"}]`
+### Versus naive stock-code grouping
 
-## API demo (`POST /cluster`)
+Stock code is treated as a strong signal, not the full strategy. The system supports semantic grouping when stock codes are missing and then flags suspicious mixed-attribute clusters for review.
 
-1. Install dependencies: `pip install -r requirements.txt`
-2. Create local env file at project root:
-   - `.env` with `OPENAI_API_KEY=your_key_here`
-3. Dev checklist before server start:
-   - `python -c "import os; print(bool(os.getenv('OPENAI_API_KEY')))"` should print `True`
-4. Start server: `python serve.py`
-5. Browser upload flow: open `http://127.0.0.1:8000/`, choose an `.xlsx` file, and submit to view a cluster table.
-6. Optional config health check: `GET http://127.0.0.1:8000/health/config` (reports config presence only; no secret values).
-7. Programmatic JSON API remains at `POST /cluster` (for curl/clients):
+### Differentiators in practice
 
-```bash
-curl -X POST "http://127.0.0.1:8000/cluster" \
-  -F "file=@data/online_retail_II.xlsx"
-```
+- Attribute-conflict guardrails to reduce false merges.
+- Candidate blocking to control pairwise cost at scale.
+- Threshold selection by F1 through labeled sweeps.
+- Risk scoring and suspect-cluster detection with explanations.
+- Synonym suggestion output to improve vocabulary coverage over time.
 
-## Project layout
-
-| Path | Role |
-|------|------|
-| `src/ingest.py` | Load product data from Excel (.xlsx) |
-| `src/normalize.py` | Clean and standardize raw records |
-| `src/extract.py` | Extract features for clustering |
-| `src/cluster.py` | Group products into clusters |
-| `src/canonicalize.py` | Produce canonical labels per cluster |
-| `src/evaluate.py` | Evaluate and build report |
-| `src/api.py` | FastAPI endpoint for xlsx upload clustering |
-| `serve.py` | Uvicorn server entrypoint for API demo |
-| `tests/` | Tests |
-| `data/` | Put `online_retail_II.xlsx` here |
-
-Pipeline: **ingest** → **normalize** → **extract** → **cluster** → **canonicalize** → **evaluate** (report).
-
-## Architecture
+## 5) Architecture (Concise)
 
 ```mermaid
 flowchart LR
-  ingest[IngestXlsx] --> normalize[NormalizeRecords]
-  normalize --> extract[ExtractFeatures]
-  extract --> cluster[ClusterRecords]
-  cluster --> canonicalize[CanonicalizeLabels]
-  canonicalize --> evaluate[EvaluateReport]
+  ingestion[Ingestion] --> normalization[Normalization]
+  normalization --> extraction[Extraction]
+  extraction --> embedding[Embedding]
+  embedding --> blocking[Blocking]
+  blocking --> clustering[Clustering]
+  clustering --> canonicalization[Canonicalization]
+  canonicalization --> evaluation[Evaluation]
+  evaluation --> reporting[Reporting]
 ```
 
-## Agent layer
+Core stage boundaries are explicit and modular:
+`src/ingest.py -> src/normalize.py -> src/extract.py -> src/cluster.py -> src/canonicalize.py -> src/evaluate.py`, with API and report rendering layered on top.
 
-This project does not implement a multi-agent orchestration framework.
+## 6) Explainability & Risk Control
 
-The practical "agent layer" is the embedding provider used during **extract**:
-- `src/extract.py` calls an embedding backend to convert normalized descriptions into vectors.
-- `src/embedding.py` provides `OpenAIEmbeddingProvider` (model: `text-embedding-3-small`).
+- `evaluate()` emits `suspect_clusters` with `reasons`, `risk_score`, and `explanation`.
+- Reason codes are explicit (`stock_code_mixed`, `unit_name_mixed`, `unit_system_mixed`, `unit_value_mixed`).
+- Risk score combines mixed-attribute signals with semantic cohesion into a bounded severity measure.
+- Optional edge-debug mode (`--edge-debug`, `--edge-debug-top-k`) records pair-level decisions: similarity, stock match, attribute snapshots, conflict reasons, and final edge decision.
+- `GET /health/config` reports required runtime configuration presence without leaking secret values.
 
-Downstream stages are deterministic pipeline steps:
-- **cluster** groups by feature similarity
-- **canonicalize** assigns cluster labels
-- **evaluate** computes report metrics and suspect-cluster explanations
+The pipeline is inspectable at both cluster level (suspect diagnostics) and edge level (debug traces), which supports reproducible failure analysis.
 
-## Metrics
+## 7) Evaluation
 
-The report includes these implemented metrics:
+- `--auto-tune-thresholds` sweeps candidate cosine thresholds against labeled assignments.
+- Metrics are pairwise precision, recall, and F1 on overlapping record IDs.
+- Diagnostics include `tp_pairs`, `fp_pairs`, `fn_pairs`, and `num_common_records`.
+- Selection rule is deterministic: highest F1, tie-break to the higher threshold.
+- Chosen threshold is applied to clustering and returned in output.
 
-- Core: `num_records`, `num_clusters`, `cluster_sizes`, `cluster_stats` (`total_clusters`, `avg_cluster_size`, `largest_cluster`)
-- Quality/risk: `suspect_clusters` entries with `cluster_id`, `reasons`, `size`, `risk_score`, `explanation`
-- Label output: `labels` mapping (`cluster_id` → canonical label)
+Threshold choice is therefore measurable, testable, and repeatable.
 
-When running threshold auto-tuning (`--auto-tune-thresholds`), additional labeled-evaluation metrics are available:
+## 8) Scalability
 
-- `precision`, `recall`, `f1`
-- Pair-count diagnostics: `tp_pairs`, `fp_pairs`, `fn_pairs`, `num_common_records`
-- Sweep summary: `best_threshold`, `best_metrics`, `results`
+- Blocking reduces candidate pairs using stock-code, prefix, and rare-token keys.
+- CLI controls: `--disable-blocking`, `--blocking-small-input-cutoff`, `--blocking-rare-token-max-frequency`.
+- API env controls: `CLUSTER_ENABLE_BLOCKING`, `CLUSTER_BLOCKING_SMALL_INPUT_CUTOFF`, `CLUSTER_BLOCKING_RARE_TOKEN_MAX_FREQUENCY`.
+- Deployment surface is FastAPI (`src/api.py`, `serve.py`) with JSON (`POST /cluster`) and browser upload (`/`, `/cluster/view`).
+
+## 9) Quickstart (Minimal & Accurate)
+
+Prerequisite: set `OPENAI_API_KEY` in your shell environment before running the CLI pipeline or API server.
+
+```powershell
+pip install -r requirements.txt
+```
+
+Run end-to-end clustering on the default sample workbook:
+
+```powershell
+python run.py data/online_retail_II.xlsx
+```
+
+Run threshold auto-tuning with labeled assignments:
+
+```powershell
+python run.py data/online_retail_II.xlsx --auto-tune-thresholds --labels-path data/labeled_sample.json --tune-thresholds 0.75,0.8,0.85,0.9,0.95
+```
+
+Start API server:
+
+```powershell
+python serve.py
+```
+
+Then use:
+- Browser upload UI: `http://127.0.0.1:8000/`
+- JSON upload endpoint: `POST /cluster`
+- Config readiness: `GET /health/config`
+
+## 10) Roadmap
+
+Credible extensions that fit the current architecture:
+
+- Active learning to prioritize uncertain edges and high-risk suspects.
+- Domain adapters for category-specific normalization and constraint profiles.
+- Human-in-the-loop review queue driven by suspect clusters and edge-debug evidence.
+- Offline embedding backend support via the `EmbeddingProvider` interface.
+
+## Why This System Demonstrates Engineering Depth
+
+- Thoughtful architecture: modular stages with clear contracts keep behavior inspectable and replaceable.
+- Robustness beyond baseline clustering: semantic edges are constrained by deterministic compatibility checks.
+- Industrial relevance: schema-validated ingestion, API upload workflow, and external config-readiness checks.
+- Quality governance: reason-coded suspect clusters with bounded risk scores and explanations.
+- Measurable optimization: threshold selection driven by precision/recall/F1, not fixed defaults.
+- Maintenance depth: synonym suggestion output creates a practical vocabulary-improvement loop.
