@@ -83,6 +83,38 @@ Then access:
 
 ---
 
+## Dataset
+
+This project uses the **Online Retail II** dataset from the UCI Machine Learning Repository.
+
+* Source: [https://archive.ics.uci.edu/dataset/352/online+retail](https://archive.ics.uci.edu/dataset/352/online+retail)
+* Time period: 01/12/2010 – 09/12/2011
+* Records: ~541,000 transactions
+* Domain: UK-based non-store online retail
+
+Download the dataset and place the Excel file at:
+
+```bash
+data/online_retail_II.xlsx
+```
+
+You may also provide your own `.xlsx` file, provided it contains the required columns:
+
+* InvoiceNo
+* StockCode
+* Description
+* Quantity
+* InvoiceDate
+* UnitPrice
+
+### Data Assumptions
+
+* Canceled invoices (InvoiceNo starting with "C") may be filtered depending on configuration.
+* UnitPrice is assumed to be in GBP (sterling).
+* Description is treated as the primary clustering surface.
+
+---
+
 ## System Architecture
 
 Pipeline stages are modular and explicit:
