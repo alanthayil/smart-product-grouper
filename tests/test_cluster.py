@@ -137,6 +137,31 @@ def test_cluster_uses_similarity_path_when_attributes_are_missing_but_non_confli
     assert [record["cluster_id"] for record in result] == [0, 0]
 
 
+def test_cluster_treats_null_unit_fields_as_optional_signal() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "a",
+            "feature_vector": [1.0, 0.0],
+            "unit_name": None,
+            "unit_system": None,
+            "unit_value": None,
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "b",
+            "feature_vector": [0.95, 0.05],
+            "unit_name": None,
+            "unit_system": None,
+            "unit_value": None,
+        },
+    ]
+
+    result = cluster(records)
+
+    assert [record["cluster_id"] for record in result] == [0, 0]
+
+
 def test_cluster_similarity_path_blocks_explicit_unit_conflict() -> None:
     records = [
         {
