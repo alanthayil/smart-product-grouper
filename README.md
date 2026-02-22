@@ -2,151 +2,241 @@
 
 Deterministic, explainable, constraint-aware clustering for noisy retail product catalogs.
 
-## 1) Headline
+---
 
-`smart-product-grouper` is an end-to-end clustering system that combines semantic embeddings with deterministic merge constraints, so outputs are both scalable and auditable.
+## Overview
 
-## 2) Industrial Problem Framing
+`smart-product-grouper` is an end-to-end clustering system that combines semantic embeddings with deterministic merge constraints. The result is scalable clustering that remains auditable and production-safe.
 
-Embedding-only clustering handles wording variation but fails in production catalogs where semantically similar strings can represent different SKUs, sizes, units, or variants. Real data adds punctuation noise, token splits, inconsistent units, and sparse metadata. Without explicit constraints, high-similarity pairs create bad merges that look plausible but break downstream analytics.
+Unlike embedding-only systems, this pipeline treats clustering as a constrained decision process: semantic similarity is necessary, but never sufficient on its own.
 
-This system treats clustering as a constrained decision process:
+---
 
-- Normalize and canonicalize textual inputs before embedding.
-- Extract structured attributes (`color`, `quantity_total`, normalized units) as compatibility signals.
-- Use cosine similarity for semantic affinity, then enforce conflict checks before edge creation.
-- Build clusters through deterministic connected components with stable ordering.
+## Why This Exists
 
-Semantic similarity is important, but never the only decision rule.
+Embedding-only clustering performs well on clean text, but production retail catalogs contain:
 
-## 3) System Overview
+* SKU variants with nearly identical descriptions
+* Inconsistent unit systems (kg/lb/oz, l/ml)
+* Token splits and punctuation noise
+* Sparse or partially structured metadata
 
-- Ingests `.xlsx` workbooks from required retail sheets and validates required columns before downstream processing.
-- Applies deterministic cleanup: text normalization, synonym canonicalization, number-word conversion, token-split canonicalization, and optional noise-token removal.
-- Converts units to canonical metric form (`kg/lb/oz -> g`, `l -> ml`) and extracts `color` plus `quantity_total`.
-- Generates embeddings from normalized descriptions using OpenAI `text-embedding-3-small`.
-- Builds candidate pairs via stock-code, prefix, and rare-token blocking for larger inputs; uses all-pairs for small inputs.
-- Forms edges by cosine threshold plus compatibility checks across stock code, unit fields, color, and quantity (with toggles).
-- Generates canonical labels and evaluates clusters into statistics, suspect diagnostics, and optional edge-level debug output.
+Without explicit compatibility checks, high-similarity pairs can produce incorrect merges that look plausible but break downstream analytics.
 
-## 4) What Makes This Different
+This system:
 
-### Versus pure embedding clustering
+* Normalizes and canonicalizes text before embedding
+* Extracts structured attributes (`color`, `quantity_total`, normalized units)
+* Uses cosine similarity for semantic affinity
+* Enforces deterministic conflict checks before merging
+* Builds clusters via stable connected components
 
-Pure embedding methods over-merge operationally incompatible products. This implementation blocks merges when attribute conflicts are detected, including:
+---
 
-- `stock_code_conflict`
-- `unit_name_conflict`
-- `unit_system_conflict`
-- `unit_value_conflict`
-- `color_conflict` (toggleable)
-- `quantity_total_conflict` (toggleable)
+## Quickstart
 
-### Versus simple fuzzy matching
+### Prerequisites
 
-Fuzzy matching is brittle on domain vocabulary and weak on semantic similarity. Here, normalization and synonym canonicalization clean the text surface, embeddings recover semantic proximity, and guardrails control precision.
+* Python 3.9+
+* `pip`
+* An OpenAI API key (for embeddings)
+* A sample `.xlsx` retail workbook (a sample file is expected at `data/online_retail_II.xlsx` or provide your own path)
 
-### Versus naive stock-code grouping
+Set your API key in the same shell session you will use to run the pipeline:
 
-Stock code is treated as a strong signal, not the full strategy. The system supports semantic grouping when stock codes are missing and then flags suspicious mixed-attribute clusters for review.
-
-### Differentiators in practice
-
-- Attribute-conflict guardrails to reduce false merges.
-- Candidate blocking to control pairwise cost at scale.
-- Threshold selection by F1 through labeled sweeps.
-- Risk scoring and suspect-cluster detection with explanations.
-- Synonym suggestion output to improve vocabulary coverage over time.
-
-## 5) Architecture (Concise)
-
-```mermaid
-flowchart LR
-  ingestion[Ingestion] --> normalization[Normalization]
-  normalization --> extraction[Extraction]
-  extraction --> embedding[Embedding]
-  embedding --> blocking[Blocking]
-  blocking --> clustering[Clustering]
-  clustering --> canonicalization[Canonicalization]
-  canonicalization --> evaluation[Evaluation]
-  evaluation --> reporting[Reporting]
+```bash
+export OPENAI_API_KEY=your_key_here
 ```
 
-Core stage boundaries are explicit and modular:
-`src/ingest.py -> src/normalize.py -> src/extract.py -> src/cluster.py -> src/canonicalize.py -> src/evaluate.py`, with API and report rendering layered on top.
+Install dependencies:
 
-## 6) Explainability & Risk Control
-
-- `evaluate()` emits `suspect_clusters` with `reasons`, `risk_score`, and `explanation`.
-- Reason codes are explicit (`stock_code_mixed`, `unit_name_mixed`, `unit_system_mixed`, `unit_value_mixed`).
-- Risk score combines mixed-attribute signals with semantic cohesion into a bounded severity measure.
-- Optional edge-debug mode (`--edge-debug`, `--edge-debug-top-k`) records pair-level decisions: similarity, stock match, attribute snapshots, conflict reasons, and final edge decision.
-- `GET /health/config` reports required runtime configuration presence without leaking secret values.
-
-The pipeline is inspectable at both cluster level (suspect diagnostics) and edge level (debug traces), which supports reproducible failure analysis.
-
-## 7) Evaluation
-
-- `--auto-tune-thresholds` sweeps candidate cosine thresholds against labeled assignments.
-- Metrics are pairwise precision, recall, and F1 on overlapping record IDs.
-- Diagnostics include `tp_pairs`, `fp_pairs`, `fn_pairs`, and `num_common_records`.
-- Selection rule is deterministic: highest F1, tie-break to the higher threshold.
-- Chosen threshold is applied to clustering and returned in output.
-
-Threshold choice is therefore measurable, testable, and repeatable.
-
-## 8) Scalability
-
-- Blocking reduces candidate pairs using stock-code, prefix, and rare-token keys.
-- CLI controls: `--disable-blocking`, `--blocking-small-input-cutoff`, `--blocking-rare-token-max-frequency`.
-- API env controls: `CLUSTER_ENABLE_BLOCKING`, `CLUSTER_BLOCKING_SMALL_INPUT_CUTOFF`, `CLUSTER_BLOCKING_RARE_TOKEN_MAX_FREQUENCY`.
-- Deployment surface is FastAPI (`src/api.py`, `serve.py`) with JSON (`POST /cluster`) and browser upload (`/`, `/cluster/view`).
-
-## 9) Quickstart (Minimal & Accurate)
-
-Prerequisite: set `OPENAI_API_KEY` in your shell environment before running the CLI pipeline or API server.
-
-```powershell
+```bash
 pip install -r requirements.txt
 ```
 
-Run end-to-end clustering on the default sample workbook:
+Run end-to-end clustering:
 
-```powershell
+```bash
 python run.py data/online_retail_II.xlsx
 ```
 
 Run threshold auto-tuning with labeled assignments:
 
-```powershell
-python run.py data/online_retail_II.xlsx --auto-tune-thresholds --labels-path data/labeled_sample.json --tune-thresholds 0.75,0.8,0.85,0.9,0.95
+```bash
+python run.py data/online_retail_II.xlsx \
+  --auto-tune-thresholds \
+  --labels-path data/labeled_sample.json \
+  --tune-thresholds 0.75,0.8,0.85,0.9,0.95
 ```
 
-Start API server:
+Start the API server:
 
-```powershell
+```bash
 python serve.py
 ```
 
-Then use:
-- Browser upload UI: `http://127.0.0.1:8000/`
-- JSON upload endpoint: `POST /cluster`
-- Config readiness: `GET /health/config`
+Then access:
 
-## 10) Roadmap
+* Browser UI: `http://127.0.0.1:8000/`
+* JSON endpoint: `POST /cluster`
+* Config health: `GET /health/config`
 
-Credible extensions that fit the current architecture:
+---
 
-- Active learning to prioritize uncertain edges and high-risk suspects.
-- Domain adapters for category-specific normalization and constraint profiles.
-- Human-in-the-loop review queue driven by suspect clusters and edge-debug evidence.
-- Offline embedding backend support via the `EmbeddingProvider` interface.
+## System Architecture
 
-## Why This System Demonstrates Engineering Depth
+Pipeline stages are modular and explicit:
 
-- Thoughtful architecture: modular stages with clear contracts keep behavior inspectable and replaceable.
-- Robustness beyond baseline clustering: semantic edges are constrained by deterministic compatibility checks.
-- Industrial relevance: schema-validated ingestion, API upload workflow, and external config-readiness checks.
-- Quality governance: reason-coded suspect clusters with bounded risk scores and explanations.
-- Measurable optimization: threshold selection driven by precision/recall/F1, not fixed defaults.
-- Maintenance depth: synonym suggestion output creates a practical vocabulary-improvement loop.
+```
+src/ingest.py
+→ src/normalize.py
+→ src/extract.py
+→ src/cluster.py
+→ src/canonicalize.py
+→ src/evaluate.py
+```
+
+The API layer (`src/api.py`, `serve.py`) sits on top of this core pipeline.
+
+Each stage has a single responsibility, making behavior inspectable and replaceable.
+
+---
+
+## How Clustering Works
+
+### 1. Normalization
+
+* Text cleanup and canonicalization
+* Synonym resolution
+* Number-word conversion
+* Token split normalization
+* Optional noise-token removal
+
+### 2. Attribute Extraction
+
+* Unit normalization (`kg/lb/oz → g`, `l → ml`)
+* `color` extraction
+* `quantity_total` extraction
+
+### 3. Embedding
+
+* OpenAI `text-embedding-3-small`
+* Cosine similarity for candidate edges
+
+### 4. Guardrails
+
+Edges are only formed if no attribute conflicts are detected:
+
+* `stock_code_conflict`
+* `unit_name_conflict`
+* `unit_system_conflict`
+* `unit_value_conflict`
+* `color_conflict` (toggleable)
+* `quantity_total_conflict` (toggleable)
+
+### 5. Cluster Construction
+
+* Deterministic connected components
+* Stable ordering for reproducibility
+
+---
+
+## Evaluation & Threshold Tuning
+
+Optional threshold sweeps allow measurable optimization:
+
+* Pairwise precision
+* Pairwise recall
+* F1 score
+
+Selection rule:
+
+* Highest F1 wins
+* Tie-breaker: higher threshold
+
+Diagnostics include:
+
+* `tp_pairs`
+* `fp_pairs`
+* `fn_pairs`
+* `num_common_records`
+
+Threshold choice is measurable and repeatable.
+
+---
+
+## Explainability & Risk Control
+
+`evaluate()` emits:
+
+* `suspect_clusters`
+* `reasons`
+* `risk_score`
+* `explanation`
+
+Optional edge-debug mode:
+
+```
+--edge-debug
+--edge-debug-top-k
+```
+
+Records:
+
+* Similarity score
+* Attribute snapshots
+* Conflict reasons
+* Final edge decision
+
+The pipeline is inspectable at both cluster and edge levels.
+
+---
+
+## Scalability Controls
+
+Blocking strategies reduce pairwise comparisons:
+
+* Stock-code blocking
+* Prefix blocking
+* Rare-token blocking
+
+CLI controls:
+
+```
+--disable-blocking
+--blocking-small-input-cutoff
+--blocking-rare-token-max-frequency
+```
+
+API environment variables:
+
+* `CLUSTER_ENABLE_BLOCKING`
+* `CLUSTER_BLOCKING_SMALL_INPUT_CUTOFF`
+* `CLUSTER_BLOCKING_RARE_TOKEN_MAX_FREQUENCY`
+
+---
+
+## Roadmap
+
+* Active learning for uncertain edges
+* Domain-specific constraint profiles
+* Human-in-the-loop review queue
+* Offline embedding backend support
+
+---
+
+## Contributing
+
+Contributions are welcome. Please open an issue to discuss major changes before submitting a pull request.
+
+---
+
+## License
+
+Add a LICENSE file (e.g., MIT, Apache 2.0) and reference it here to clarify usage and distribution rights.
+
+---
+
+## Notes
+
+This project is designed for production-grade retail catalog clustering, where correctness, auditability, and constraint enforcement matter as much as semantic similarity.
