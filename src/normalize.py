@@ -14,6 +14,19 @@ _NUMBER_UNIT_RUNS = re.compile(
     r"\b(\d+(?:\.\d+)?)\s*(kg|g|lb|lbs|oz|l|ml)\b",
     flags=re.IGNORECASE,
 )
+_MULTIPLICATIVE_QUANTITY_RUNS = re.compile(
+    r"\b(\d+)\s*x\s*(\d+)\b",
+    flags=re.IGNORECASE,
+)
+_PACK_OF_QUANTITY_RUNS = re.compile(
+    r"\bpack\s+of\s+(\d+)\b",
+    flags=re.IGNORECASE,
+)
+_SUFFIX_QUANTITY_RUNS = re.compile(
+    r"\b(\d+)\s*(pack|ct|count)\b",
+    flags=re.IGNORECASE,
+)
+_STANDALONE_INTEGER_RUNS = re.compile(r"\b(\d+)\b")
 _COLOR_WORD_RUNS = re.compile(
     r"\b(red|pink|blue|green|black|white|yellow|purple|orange|brown|gray|grey)\b",
     flags=re.IGNORECASE,
@@ -87,7 +100,8 @@ def _normalize_unit_tokens(text: str) -> str:
 
 def _clean_text(value: object) -> str:
     """Apply baseline free-text cleaning for product descriptions."""
-    text = _normalize_unit_tokens(str(value).lower().strip())
+    text = str(value).lower().strip().replace("×", "x")
+    text = _normalize_unit_tokens(text)
     text = _NON_ALNUM_RUNS.sub(" ", text)
     text = _WHITESPACE_RUNS.sub(" ", text)
     return text.strip()
@@ -117,6 +131,30 @@ def _extract_color(description: str) -> str | None:
     return _COLOR_CANONICAL_MAP.get(raw_color, raw_color)
 
 
+def _extract_quantity_total(description: str) -> int | None:
+    """Extract canonical quantity totals from common pack/count expressions."""
+    multiplicative_match = _MULTIPLICATIVE_QUANTITY_RUNS.search(description)
+    if multiplicative_match:
+        left, right = multiplicative_match.group(1), multiplicative_match.group(2)
+        return int(left) * int(right)
+
+    pack_of_match = _PACK_OF_QUANTITY_RUNS.search(description)
+    if pack_of_match:
+        return int(pack_of_match.group(1))
+
+    suffix_match = _SUFFIX_QUANTITY_RUNS.search(description)
+    if suffix_match:
+        return int(suffix_match.group(1))
+
+    if _NUMBER_UNIT_RUNS.search(description):
+        return None
+
+    standalone_numbers = [int(match.group(1)) for match in _STANDALONE_INTEGER_RUNS.finditer(description)]
+    if len(standalone_numbers) == 1:
+        return standalone_numbers[0]
+    return None
+
+
 def normalize(records: list[dict]) -> list[dict]:
     """Normalize a list of raw records."""
     normalized: list[dict] = []
@@ -131,6 +169,7 @@ def normalize(records: list[dict]) -> list[dict]:
             "stock_code": stock_code,
             "description": description,
             "color": None,
+            "quantity_total": None,
             "unit_value": None,
             "unit_name": None,
             "unit_system": None,
@@ -138,6 +177,9 @@ def normalize(records: list[dict]) -> list[dict]:
         color = _extract_color(description)
         if color:
             normalized_record["color"] = color
+        quantity_total = _extract_quantity_total(description)
+        if quantity_total is not None:
+            normalized_record["quantity_total"] = quantity_total
         if unit_info:
             normalized_record.update(unit_info)
         normalized.append(normalized_record)

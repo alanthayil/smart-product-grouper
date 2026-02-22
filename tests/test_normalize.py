@@ -8,6 +8,7 @@ from src.normalize import (
     _apply_synonyms,
     _clean_text,
     _extract_color,
+    _extract_quantity_total,
     _extract_unit_info,
     normalize,
 )
@@ -45,6 +46,7 @@ def test_normalize_cleans_description_only() -> None:
             "stock_code": "SKU_123",
             "description": "white hanging heart",
             "color": "white",
+            "quantity_total": None,
             "unit_value": None,
             "unit_name": None,
             "unit_system": None,
@@ -101,6 +103,7 @@ def test_normalize_formats_units_and_extracts_structured_fields() -> None:
             "stock_code": "",
             "description": "premium olive oil 1 l bottle",
             "color": None,
+            "quantity_total": None,
             "unit_value": 1000.0,
             "unit_name": "ml",
             "unit_system": "metric",
@@ -136,6 +139,7 @@ def test_normalize_applies_synonyms_and_preserves_unit_extraction() -> None:
             "stock_code": "",
             "description": "hexagon bolt 2 oz pack",
             "color": None,
+            "quantity_total": None,
             "unit_value": 56.699,
             "unit_name": "g",
             "unit_system": "metric",
@@ -177,6 +181,7 @@ def test_normalize_handles_mixed_casing_end_to_end() -> None:
             "stock_code": "",
             "description": "hexagon bolt 2 oz",
             "color": None,
+            "quantity_total": None,
             "unit_value": 56.699,
             "unit_name": "g",
             "unit_system": "metric",
@@ -230,6 +235,7 @@ def test_normalize_handles_weird_formatting_and_stays_deterministic() -> None:
             "stock_code": "",
             "description": "hexagon bolt 2 oz pack",
             "color": None,
+            "quantity_total": None,
             "unit_value": 56.699,
             "unit_name": "g",
             "unit_system": "metric",
@@ -249,6 +255,24 @@ def test_extract_color_returns_canonical_color_or_none(
     description: str, expected: str | None
 ) -> None:
     assert _extract_color(description) == expected
+
+
+@pytest.mark.parametrize(
+    ("description", "expected"),
+    [
+        ("60", 60),
+        ("6 x 10", 60),
+        ("6x10", 60),
+        ("pack of 72", 72),
+        ("olive oil 1 l bottle", None),
+        ("no quantity signal", None),
+    ],
+)
+def test_extract_quantity_total_handles_minimal_pack_patterns(
+    description: str, expected: int | None
+) -> None:
+    cleaned = _clean_text(description)
+    assert _extract_quantity_total(cleaned) == expected
 
 
 def test_normalize_preserves_stock_code_and_emits_deterministic_ids() -> None:
