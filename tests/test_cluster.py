@@ -74,6 +74,27 @@ def test_cluster_uses_stock_code_match_path() -> None:
     assert [record["cluster_id"] for record in result] == [0, 0]
 
 
+def test_cluster_stock_code_match_creates_edge_below_similarity_threshold() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "a",
+            "feature_vector": [1.0, 0.0],
+            "stock_code": "A1",
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "b",
+            "feature_vector": [0.0, 1.0],
+            "stock_code": "A1",
+        },
+    ]
+
+    result = cluster(records)
+
+    assert [record["cluster_id"] for record in result] == [0, 0]
+
+
 def test_cluster_falls_back_to_unit_matching_without_stock_codes() -> None:
     records = [
         {
@@ -95,6 +116,46 @@ def test_cluster_falls_back_to_unit_matching_without_stock_codes() -> None:
     result = cluster(records)
 
     assert [record["cluster_id"] for record in result] == [0, 0]
+
+
+def test_cluster_uses_similarity_path_when_attributes_are_missing_but_non_conflicting() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "a",
+            "feature_vector": [1.0, 0.0],
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "b",
+            "feature_vector": [0.95, 0.05],
+        },
+    ]
+
+    result = cluster(records)
+
+    assert [record["cluster_id"] for record in result] == [0, 0]
+
+
+def test_cluster_similarity_path_blocks_explicit_unit_conflict() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "a",
+            "feature_vector": [1.0, 0.0],
+            "unit_name": "ml",
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "b",
+            "feature_vector": [0.95, 0.05],
+            "unit_name": "g",
+        },
+    ]
+
+    result = cluster(records)
+
+    assert [record["cluster_id"] for record in result] == [0, 1]
 
 
 def test_cluster_connected_components_are_transitive() -> None:

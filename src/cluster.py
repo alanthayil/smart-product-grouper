@@ -38,23 +38,28 @@ def _normalized_optional(value: object) -> str:
     return str(value or "").strip().lower()
 
 
-def _attributes_match(record_a: dict, record_b: dict) -> bool:
-    """Apply hybrid stock-code / unit attribute matching rule."""
+def _stock_code_match(record_a: dict, record_b: dict) -> bool:
+    """Return True when both non-empty stock codes are equal."""
     stock_a = _normalized_optional(record_a.get("stock_code"))
     stock_b = _normalized_optional(record_b.get("stock_code"))
-    if stock_a and stock_b:
-        return stock_a == stock_b
+    return bool(stock_a and stock_b and stock_a == stock_b)
+
+
+def _compatible(record_a: dict, record_b: dict) -> bool:
+    """Return True when no explicit attribute conflicts are detected."""
+    stock_a = _normalized_optional(record_a.get("stock_code"))
+    stock_b = _normalized_optional(record_b.get("stock_code"))
+    if stock_a and stock_b and stock_a != stock_b:
+        return False
 
     unit_name_a = _normalized_optional(record_a.get("unit_name"))
     unit_name_b = _normalized_optional(record_b.get("unit_name"))
+    if unit_name_a and unit_name_b and unit_name_a != unit_name_b:
+        return False
+
     unit_system_a = _normalized_optional(record_a.get("unit_system"))
     unit_system_b = _normalized_optional(record_b.get("unit_system"))
-    if not (
-        bool(unit_name_a)
-        and bool(unit_system_a)
-        and unit_name_a == unit_name_b
-        and unit_system_a == unit_system_b
-    ):
+    if unit_system_a and unit_system_b and unit_system_a != unit_system_b:
         return False
 
     unit_value_a = record_a.get("unit_value")
@@ -105,12 +110,12 @@ def cluster(
     adjacency: list[set[int]] = [set() for _ in records_or_features]
     for source_index in range(len(records_or_features)):
         for target_index in range(source_index + 1, len(records_or_features)):
-            similarity = similarities[source_index][target_index]
-            if similarity < similarity_threshold:
-                continue
             source_record = records_or_features[source_index]
             target_record = records_or_features[target_index]
-            if not _attributes_match(source_record, target_record):
+            similarity = similarities[source_index][target_index]
+            stock_match = _stock_code_match(source_record, target_record)
+            compatible = _compatible(source_record, target_record)
+            if not (stock_match or (similarity >= similarity_threshold and compatible)):
                 continue
             adjacency[source_index].add(target_index)
             adjacency[target_index].add(source_index)
