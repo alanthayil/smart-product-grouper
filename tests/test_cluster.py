@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import pandas as pd
 import pytest
 
 from src.cluster import cluster, generate_candidate_pairs
+from src.extract import extract
+from src.ingest import RETAIL_COLUMNS, RETAIL_SHEETS, ingest
+from src.normalize import normalize
 
 
 def test_cluster_empty_input_returns_empty_list() -> None:
@@ -572,3 +578,90 @@ def test_blocking_candidate_count_is_smaller_than_all_pairs_for_large_sparse_dat
     all_pairs = (len(records) * (len(records) - 1)) // 2
 
     assert len(candidates) < all_pairs
+
+
+class _WorkbookFakeProvider:
+    def __init__(self, vector_by_description: dict[str, list[float]]) -> None:
+        self._vector_by_description = vector_by_description
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        missing = [text for text in texts if text not in self._vector_by_description]
+        if missing:
+            raise AssertionError(f"Missing test vector mappings for: {missing}")
+        return [self._vector_by_description[text] for text in texts]
+
+
+def _build_workbook_row(record_id: str, description: str) -> dict[str, object]:
+    row: dict[str, object] = {
+        "Invoice": f"INV-{record_id}",
+        "StockCode": "",
+        "Description": description,
+        "Quantity": 1,
+        "InvoiceDate": "2011-01-01 00:00:00",
+        "Price": 1.0,
+        "Customer ID": "10000",
+        "Country": "United Kingdom",
+        "record_id": record_id,
+    }
+    return row
+
+
+def _write_sample_workbook(path: Path, rows: list[dict[str, object]]) -> None:
+    df = pd.DataFrame(rows)
+    for column in RETAIL_COLUMNS:
+        if column not in df.columns:
+            df[column] = None
+    ordered_columns = list(RETAIL_COLUMNS) + ["record_id"]
+    df = df[ordered_columns]
+    with pd.ExcelWriter(path, engine="openpyxl") as writer:
+        df.to_excel(writer, sheet_name=RETAIL_SHEETS[0], index=False)
+        df.iloc[0:0].to_excel(writer, sheet_name=RETAIL_SHEETS[1], index=False)
+
+
+def test_sample_workbook_expected_clustering(tmp_path: Path) -> None:
+    rows = [
+        _build_workbook_row("bird-a", "Decorative Birdcage Lantern"),
+        _build_workbook_row("bird-b", "Decorative bird cage lantern"),
+        _build_workbook_row("two-a", "Party candle two pack"),
+        _build_workbook_row("two-b", "Party candle 2 pack"),
+        _build_workbook_row("dup-a", "Vintage photo frame"),
+        _build_workbook_row("dup-b", "Vintage photo frame"),
+        _build_workbook_row("red-a", "Ceramic mug red"),
+        _build_workbook_row("pink-a", "Ceramic mug pink"),
+        _build_workbook_row("pack-a", "Storage box pack of 2"),
+        _build_workbook_row("pack-b", "Storage box pack of 3"),
+        _build_workbook_row("solo-a", "Striped table runner"),
+    ]
+    vector_by_description = {
+        "decorative bird cage lantern": [1.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        "party candle 2 pack": [0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+        "vintage photo frame": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0],
+        "ceramic mug red": [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        "ceramic mug pink": [0.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+        "storage box pack 2": [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        "storage box pack 3": [0.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        "striped table runner": [0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+    }
+    provider = _WorkbookFakeProvider(vector_by_description)
+
+    workbook_path = tmp_path / "expected_clustering.xlsx"
+    _write_sample_workbook(workbook_path, rows)
+    raw = ingest(str(workbook_path))
+    normalized = normalize(raw)
+    for record in normalized:
+        stock_code = str(record.get("stock_code", "")).strip().lower()
+        if stock_code == "nan":
+            record["stock_code"] = ""
+    features = extract(normalized, provider=provider)
+    clustered = cluster(features)
+
+    cluster_by_record_id = {
+        str(record["record_id"]): int(record["cluster_id"]) for record in clustered
+    }
+    num_clusters = len({int(record["cluster_id"]) for record in clustered})
+
+    assert 7 <= num_clusters <= 8
+    assert cluster_by_record_id["bird-a"] == cluster_by_record_id["bird-b"]
+    assert cluster_by_record_id["two-a"] == cluster_by_record_id["two-b"]
+    assert cluster_by_record_id["dup-a"] == cluster_by_record_id["dup-b"]
+    assert cluster_by_record_id["red-a"] != cluster_by_record_id["pink-a"]
