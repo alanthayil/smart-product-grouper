@@ -86,6 +86,23 @@ def main(argv: list[str] | None = None) -> None:
         default=None,
         help="Path to JSON labeled assignments used for threshold auto-tuning.",
     )
+    parser.add_argument(
+        "--disable-blocking",
+        action="store_true",
+        help="Disable blocking and force all-pairs clustering at any input size.",
+    )
+    parser.add_argument(
+        "--blocking-small-input-cutoff",
+        type=int,
+        default=300,
+        help="Use all-pairs when record count is at or below this cutoff (default: 300).",
+    )
+    parser.add_argument(
+        "--blocking-rare-token-max-frequency",
+        type=int,
+        default=5,
+        help="Token frequency threshold used for rare-token blocking keys (default: 5).",
+    )
     args = parser.parse_args(argv)
 
     input_path = args.input_path
@@ -108,7 +125,19 @@ def main(argv: list[str] | None = None) -> None:
         )
         selected_threshold = float(tuning_summary["best_threshold"])
 
-    clusters = cluster(features, similarity_threshold=selected_threshold)
+    try:
+        clusters = cluster(
+            features,
+            similarity_threshold=selected_threshold,
+            enable_blocking=not args.disable_blocking,
+            blocking_small_input_cutoff=args.blocking_small_input_cutoff,
+            rare_token_max_frequency=args.blocking_rare_token_max_frequency,
+        )
+    except TypeError as exc:
+        if "unexpected keyword argument" not in str(exc):
+            raise
+        # Backward-compatible fallback for test doubles or legacy call sites.
+        clusters = cluster(features, similarity_threshold=selected_threshold)
     labels = canonicalize(clusters)
     report = evaluate(clusters, labels)
     if tuning_summary is not None:

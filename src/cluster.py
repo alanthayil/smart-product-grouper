@@ -3,6 +3,10 @@
 from __future__ import annotations
 
 import math
+from collections import Counter, defaultdict
+
+_DEFAULT_BLOCKING_SMALL_INPUT_CUTOFF = 300
+_DEFAULT_RARE_TOKEN_MAX_FREQUENCY = 5
 
 
 def _vector_norm(vector: list[float]) -> float:
@@ -104,10 +108,87 @@ def _build_connected_components(adjacency: list[set[int]]) -> list[int]:
     return cluster_ids
 
 
+def _all_pairs(count: int) -> list[tuple[int, int]]:
+    """Return all unique index pairs for an input size."""
+    pairs: list[tuple[int, int]] = []
+    for source_index in range(count):
+        for target_index in range(source_index + 1, count):
+            pairs.append((source_index, target_index))
+    return pairs
+
+
+def _description_tokens(record: dict) -> list[str]:
+    """Return normalized whitespace tokens from description text."""
+    description = _normalized_optional(
+        record.get("description_norm", record.get("description", ""))
+    )
+    return [token for token in description.split() if token]
+
+
+def _add_block_pairs(
+    blocks: dict[str, list[int]],
+    candidate_pairs: set[tuple[int, int]],
+) -> None:
+    """Expand block membership lists into unique pair indices."""
+    for members in blocks.values():
+        if len(members) < 2:
+            continue
+        for left in range(len(members)):
+            for right in range(left + 1, len(members)):
+                source_index = members[left]
+                target_index = members[right]
+                candidate_pairs.add((min(source_index, target_index), max(source_index, target_index)))
+
+
+def generate_candidate_pairs(
+    records_or_features: list[dict],
+    *,
+    rare_token_max_frequency: int = _DEFAULT_RARE_TOKEN_MAX_FREQUENCY,
+) -> list[tuple[int, int]]:
+    """Generate candidate pairs from stock, prefix, and rare-token blocks."""
+    if len(records_or_features) < 2:
+        return []
+
+    stock_blocks: dict[str, list[int]] = defaultdict(list)
+    prefix_blocks: dict[str, list[int]] = defaultdict(list)
+    rare_token_blocks: dict[str, list[int]] = defaultdict(list)
+    tokens_per_record: list[set[str]] = []
+    token_document_frequency: Counter[str] = Counter()
+
+    for index, record in enumerate(records_or_features):
+        stock_code = _normalized_optional(record.get("stock_code"))
+        if stock_code:
+            stock_blocks[stock_code].append(index)
+
+        tokens = _description_tokens(record)
+        if len(tokens) >= 2:
+            prefix_blocks[f"p2:{' '.join(tokens[:2])}"].append(index)
+        if len(tokens) >= 3:
+            prefix_blocks[f"p3:{' '.join(tokens[:3])}"].append(index)
+
+        unique_tokens = set(tokens)
+        tokens_per_record.append(unique_tokens)
+        token_document_frequency.update(unique_tokens)
+
+    for index, unique_tokens in enumerate(tokens_per_record):
+        for token in unique_tokens:
+            if token_document_frequency[token] <= rare_token_max_frequency:
+                rare_token_blocks[token].append(index)
+
+    candidate_pairs: set[tuple[int, int]] = set()
+    _add_block_pairs(stock_blocks, candidate_pairs)
+    _add_block_pairs(prefix_blocks, candidate_pairs)
+    _add_block_pairs(rare_token_blocks, candidate_pairs)
+    return sorted(candidate_pairs)
+
+
 def cluster(
     records_or_features: list[dict],
     *,
     similarity_threshold: float = 0.85,
+    enable_blocking: bool = True,
+    blocking_small_input_cutoff: int = _DEFAULT_BLOCKING_SMALL_INPUT_CUTOFF,
+    rare_token_max_frequency: int = _DEFAULT_RARE_TOKEN_MAX_FREQUENCY,
 ) -> list[dict]:
     """Assign cluster IDs from pairwise similarity and attribute gates."""
     if not records_or_features:
@@ -117,20 +198,34 @@ def cluster(
         [float(value) for value in record.get("feature_vector", [])]
         for record in records_or_features
     ]
-    similarities = _pairwise_cosine_similarity(vectors)
 
     adjacency: list[set[int]] = [set() for _ in records_or_features]
-    for source_index in range(len(records_or_features)):
-        for target_index in range(source_index + 1, len(records_or_features)):
-            source_record = records_or_features[source_index]
-            target_record = records_or_features[target_index]
-            similarity = similarities[source_index][target_index]
-            stock_match = _stock_code_match(source_record, target_record)
-            compatible = _compatible(source_record, target_record)
-            if not (stock_match or (similarity >= similarity_threshold and compatible)):
-                continue
-            adjacency[source_index].add(target_index)
-            adjacency[target_index].add(source_index)
+
+    use_blocking = enable_blocking and len(records_or_features) > blocking_small_input_cutoff
+    if use_blocking:
+        candidate_pairs = generate_candidate_pairs(
+            records_or_features,
+            rare_token_max_frequency=rare_token_max_frequency,
+        )
+        similarities = None
+    else:
+        candidate_pairs = _all_pairs(len(records_or_features))
+        similarities = _pairwise_cosine_similarity(vectors)
+
+    for source_index, target_index in candidate_pairs:
+        source_record = records_or_features[source_index]
+        target_record = records_or_features[target_index]
+        similarity = (
+            _cosine_similarity(vectors[source_index], vectors[target_index])
+            if similarities is None
+            else similarities[source_index][target_index]
+        )
+        stock_match = _stock_code_match(source_record, target_record)
+        compatible = _compatible(source_record, target_record)
+        if not (stock_match or (similarity >= similarity_threshold and compatible)):
+            continue
+        adjacency[source_index].add(target_index)
+        adjacency[target_index].add(source_index)
 
     cluster_ids = _build_connected_components(adjacency)
     clustered_records: list[dict] = []

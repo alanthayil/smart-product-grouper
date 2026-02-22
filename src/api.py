@@ -30,6 +30,35 @@ INVALID_XLSX_DETAIL = (
 REQUIRED_ENV_VARS = ("OPENAI_API_KEY",)
 
 
+def _env_bool(name: str, default: bool) -> bool:
+    """Read a boolean environment flag with a safe default."""
+    raw = str(os.getenv(name, "")).strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return default
+
+
+def _env_int(name: str, default: int) -> int:
+    """Read an integer environment setting with a safe default."""
+    raw = str(os.getenv(name, "")).strip()
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+CLUSTER_ENABLE_BLOCKING = _env_bool("CLUSTER_ENABLE_BLOCKING", True)
+CLUSTER_BLOCKING_SMALL_INPUT_CUTOFF = _env_int("CLUSTER_BLOCKING_SMALL_INPUT_CUTOFF", 300)
+CLUSTER_BLOCKING_RARE_TOKEN_MAX_FREQUENCY = _env_int(
+    "CLUSTER_BLOCKING_RARE_TOKEN_MAX_FREQUENCY",
+    5,
+)
+
+
 def _required_config_status() -> dict[str, bool]:
     """Return required runtime config presence without exposing values."""
     return {name: bool(os.getenv(name)) for name in REQUIRED_ENV_VARS}
@@ -115,7 +144,18 @@ async def _run_pipeline_from_upload(file: UploadFile) -> dict:
             stage = "extract"
             features = extract(normalized)
             stage = "cluster"
-            clusters = cluster(features)
+            try:
+                clusters = cluster(
+                    features,
+                    enable_blocking=CLUSTER_ENABLE_BLOCKING,
+                    blocking_small_input_cutoff=CLUSTER_BLOCKING_SMALL_INPUT_CUTOFF,
+                    rare_token_max_frequency=CLUSTER_BLOCKING_RARE_TOKEN_MAX_FREQUENCY,
+                )
+            except TypeError as exc:
+                if "unexpected keyword argument" not in str(exc):
+                    raise
+                # Backward-compatible fallback for test doubles or legacy call sites.
+                clusters = cluster(features)
             stage = "canonicalize"
             labels = canonicalize(clusters)
             stage = "evaluate"
