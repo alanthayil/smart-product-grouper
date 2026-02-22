@@ -183,6 +183,47 @@ def test_cluster_similarity_path_blocks_explicit_unit_conflict() -> None:
     assert [record["cluster_id"] for record in result] == [0, 1]
 
 
+def test_cluster_similarity_path_blocks_explicit_color_conflict() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "red ceramic mug",
+            "feature_vector": [1.0, 0.0],
+            "color": "red",
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "blue ceramic mug",
+            "feature_vector": [0.95, 0.05],
+            "color": "blue",
+        },
+    ]
+
+    result = cluster(records)
+
+    assert [record["cluster_id"] for record in result] == [0, 1]
+
+
+def test_cluster_similarity_path_allows_missing_color_signal() -> None:
+    records = [
+        {
+            "record_id": "r0",
+            "description_norm": "red ceramic mug",
+            "feature_vector": [1.0, 0.0],
+            "color": "red",
+        },
+        {
+            "record_id": "r1",
+            "description_norm": "ceramic mug",
+            "feature_vector": [0.95, 0.05],
+        },
+    ]
+
+    result = cluster(records)
+
+    assert [record["cluster_id"] for record in result] == [0, 0]
+
+
 def test_cluster_connected_components_are_transitive() -> None:
     records = [
         {
@@ -351,6 +392,7 @@ def test_cluster_preserves_optional_attributes_for_downstream_labeling() -> None
             "description_norm": "sparkling water bottle",
             "feature_vector": [1.0, 0.0],
             "stock_code": "WATER-500",
+            "color": "green",
             "unit_value": 500.0,
             "unit_name": "ml",
             "unit_system": "metric",
@@ -360,6 +402,7 @@ def test_cluster_preserves_optional_attributes_for_downstream_labeling() -> None
             "description_norm": "sparkling water bottle",
             "feature_vector": [0.96, 0.04],
             "stock_code": "WATER-500",
+            "color": "green",
             "unit_value": 500.0,
             "unit_name": "ml",
             "unit_system": "metric",
@@ -369,6 +412,7 @@ def test_cluster_preserves_optional_attributes_for_downstream_labeling() -> None
     result = cluster(records)
 
     assert result[0]["stock_code"] == "WATER-500"
+    assert result[0]["color"] == "green"
     assert result[0]["unit_value"] == 500.0
     assert result[0]["unit_name"] == "ml"
     assert result[0]["unit_system"] == "metric"

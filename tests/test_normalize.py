@@ -4,7 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from src.normalize import _apply_synonyms, _clean_text, _extract_unit_info, normalize
+from src.normalize import (
+    _apply_synonyms,
+    _clean_text,
+    _extract_color,
+    _extract_unit_info,
+    normalize,
+)
 
 
 @pytest.mark.parametrize(
@@ -38,6 +44,7 @@ def test_normalize_cleans_description_only() -> None:
             "row_index": 0,
             "stock_code": "SKU_123",
             "description": "white hanging heart",
+            "color": "white",
             "unit_value": None,
             "unit_name": None,
             "unit_system": None,
@@ -93,6 +100,7 @@ def test_normalize_formats_units_and_extracts_structured_fields() -> None:
             "row_index": 0,
             "stock_code": "",
             "description": "premium olive oil 1 l bottle",
+            "color": None,
             "unit_value": 1000.0,
             "unit_name": "ml",
             "unit_system": "metric",
@@ -127,6 +135,7 @@ def test_normalize_applies_synonyms_and_preserves_unit_extraction() -> None:
             "row_index": 0,
             "stock_code": "",
             "description": "hexagon bolt 2 oz pack",
+            "color": None,
             "unit_value": 56.699,
             "unit_name": "g",
             "unit_system": "metric",
@@ -167,6 +176,7 @@ def test_normalize_handles_mixed_casing_end_to_end() -> None:
             "row_index": 0,
             "stock_code": "",
             "description": "hexagon bolt 2 oz",
+            "color": None,
             "unit_value": 56.699,
             "unit_name": "g",
             "unit_system": "metric",
@@ -219,11 +229,26 @@ def test_normalize_handles_weird_formatting_and_stays_deterministic() -> None:
             "row_index": 0,
             "stock_code": "",
             "description": "hexagon bolt 2 oz pack",
+            "color": None,
             "unit_value": 56.699,
             "unit_name": "g",
             "unit_system": "metric",
         }
     ]
+
+
+@pytest.mark.parametrize(
+    ("description", "expected"),
+    [
+        ("blue ceramic mug", "blue"),
+        ("GREY tea cup", "gray"),
+        ("no explicit tone here", None),
+    ],
+)
+def test_extract_color_returns_canonical_color_or_none(
+    description: str, expected: str | None
+) -> None:
+    assert _extract_color(description) == expected
 
 
 def test_normalize_preserves_stock_code_and_emits_deterministic_ids() -> None:

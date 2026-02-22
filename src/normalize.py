@@ -14,6 +14,10 @@ _NUMBER_UNIT_RUNS = re.compile(
     r"\b(\d+(?:\.\d+)?)\s*(kg|g|lb|lbs|oz|l|ml)\b",
     flags=re.IGNORECASE,
 )
+_COLOR_WORD_RUNS = re.compile(
+    r"\b(red|pink|blue|green|black|white|yellow|purple|orange|brown|gray|grey)\b",
+    flags=re.IGNORECASE,
+)
 
 _UNIT_CONVERSION = {
     "g": (1.0, "g"),
@@ -26,6 +30,9 @@ _UNIT_CONVERSION = {
 }
 _WORD_BOUNDARY = r"(?<![0-9a-zA-Z]){term}(?![0-9a-zA-Z])"
 _SYNONYM_PATH = Path(__file__).resolve().parent.parent / "synonyms.yml"
+_COLOR_CANONICAL_MAP = {
+    "grey": "gray",
+}
 
 
 class UnitInfo(TypedDict):
@@ -101,6 +108,15 @@ def _extract_unit_info(description: str) -> UnitInfo | None:
     }
 
 
+def _extract_color(description: str) -> str | None:
+    """Extract the first recognized canonical color token."""
+    match = _COLOR_WORD_RUNS.search(description)
+    if not match:
+        return None
+    raw_color = match.group(1).lower()
+    return _COLOR_CANONICAL_MAP.get(raw_color, raw_color)
+
+
 def normalize(records: list[dict]) -> list[dict]:
     """Normalize a list of raw records."""
     normalized: list[dict] = []
@@ -114,10 +130,14 @@ def normalize(records: list[dict]) -> list[dict]:
             "row_index": row_index,
             "stock_code": stock_code,
             "description": description,
+            "color": None,
             "unit_value": None,
             "unit_name": None,
             "unit_system": None,
         }
+        color = _extract_color(description)
+        if color:
+            normalized_record["color"] = color
         if unit_info:
             normalized_record.update(unit_info)
         normalized.append(normalized_record)

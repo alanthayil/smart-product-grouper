@@ -65,7 +65,13 @@ def _compatible(record_a: dict, record_b: dict) -> bool:
     unit_value_a = record_a.get("unit_value")
     unit_value_b = record_b.get("unit_value")
     if unit_value_a is not None and unit_value_b is not None:
-        return float(unit_value_a) == float(unit_value_b)
+        if float(unit_value_a) != float(unit_value_b):
+            return False
+
+    color_a = _normalized_optional(record_a.get("color"))
+    color_b = _normalized_optional(record_b.get("color"))
+    if color_a and color_b and color_a != color_b:
+        return False
     return True
 
 
@@ -132,7 +138,7 @@ def cluster(
         stock_code = str(record.get("stock_code", "")).strip()
         if stock_code:
             clustered_record["stock_code"] = stock_code
-        for field in ("unit_value", "unit_name", "unit_system"):
+        for field in ("color", "unit_value", "unit_name", "unit_system"):
             if record.get(field) is not None:
                 clustered_record[field] = record[field]
         clustered_records.append(clustered_record)

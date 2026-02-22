@@ -23,6 +23,7 @@ def test_extract_returns_contract_shape_and_order() -> None:
         {
             "description": "white hanging heart holder",
             "stock_code": "85123A",
+            "color": "white",
             "unit_value": 350.0,
             "unit_name": "ml",
             "unit_system": "metric",
@@ -38,6 +39,7 @@ def test_extract_returns_contract_shape_and_order() -> None:
             "record_id": "record-0",
             "description_norm": "white hanging heart holder",
             "stock_code": "85123A",
+            "color": "white",
             "feature_vector": [0.1, 0.2],
             "unit_value": 350.0,
             "unit_name": "ml",
